@@ -1,0 +1,31 @@
+{
+  "mods": [
+    {
+      "id": "byeframeblink",
+      "title": "BYE Frame Blink",
+      "author": "davidciglesias",
+      "description": "Before Your Eyes only. Steam Frame eye tracking for blinks and gaze aiming, plus full-view eyelids and blink menus. Needs UUVR (Mono, legacy) and frameeyeosc running on the headset.",
+      "sourceCode": "https://github.com/davidciglesias/before-your-frame",
+      "engine": "Unity",
+      "unityBackend": "Mono",
+      "engineVersionRange": { "maximum": { "major": 2019 } },
+      "download": {
+        "id": "v0.1.0",
+        "url": "https://github.com/davidciglesias/before-your-frame/releases/download/v0.1.0/BYEFrameBlink.zip"
+      },
+      "install": {
+        "manifestPath": "{{GameInstalledModsPath}}/manifests/byeframeblink.json",
+        "extract": [
+          {
+            "source": ".",
+            "destination": "{{GameInstalledModsPath}}/bepinex/BepInEx/plugins/BYEFrameBlink"
+          }
+        ],
+        "mainInstalledFolderPath": "{{GameInstalledModsPath}}/bepinex/BepInEx/plugins/BYEFrameBlink"
+      },
+      "requiredDependencies": [
+        { "modId": "uuvr-mono-legacy" }
+      ]
+    }
+  ]
+}

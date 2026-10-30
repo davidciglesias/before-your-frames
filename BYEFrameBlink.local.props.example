@@ -1,0 +1,9 @@
+<!-- Copy to BYEFrameBlink.local.props (git-ignored) and adjust. -->
+<Project>
+  <PropertyGroup>
+    <!-- Folder that contains "Before Your Eyes.exe". -->
+    <GameDir>C:\Program Files (x86)\Steam\steamapps\common\Before Your Eyes</GameDir>
+    <!-- BepInEx folder Rai Pal installed for the game; the build copies the DLL to plugins\BYEFrameBlink there. Leave out to skip the copy. -->
+    <BepInExDir>%APPDATA%\raicuparta\rai-pal\data\installed-mods\&lt;game id&gt;\bepinex\BepInEx</BepInExDir>
+  </PropertyGroup>
+</Project>
