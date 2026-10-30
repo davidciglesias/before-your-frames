@@ -1,0 +1,11 @@
+bin/
+obj/
+dist/
+.vs/
+*.user
+BYEFrameBlink.local.props
+
+# Local test output and notes that name scenes (spoilers); never publish
+tools/last_test_results.txt
+tools/autoplay_unproven.md
+tools/thorough_resume.txt
