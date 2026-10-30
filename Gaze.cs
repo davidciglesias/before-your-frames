@@ -45,6 +45,9 @@ namespace BYEFrameBlink
             float now = Time.realtimeSinceStartup;
             if (BlinkState.RawClosed || BlinkState.Closed)
             {
+                // The eyes drift (mostly down) while the lids close, before the blink registers: freeze on where they
+                // were looking a moment earlier, so a blink presses what you were looking at, not what's below it.
+                if (now >= _frozenUntil && _hasValue) _smoothed = GazeAt(now - Plugin.GazeRewindSeconds.Value);
                 _frozenUntil = now + Plugin.GazeHoldAfterBlink.Value;
                 if (_hasValue) return;
             }
@@ -66,6 +69,34 @@ namespace BYEFrameBlink
             float tau = Plugin.GazeSmoothingSeconds.Value;
             float k = tau <= 0f ? 1f : 1f - Mathf.Exp(-Time.unscaledDeltaTime / tau);
             _smoothed = Vector2.Lerp(_smoothed, target, k);
+            Record(now, _smoothed);
+        }
+
+        // Recent open-eye gaze samples (time, degrees), for rewinding at the start of a blink.
+        private const int HistorySize = 64;
+        private static readonly float[] HistTime = new float[HistorySize];
+        private static readonly Vector2[] HistGaze = new Vector2[HistorySize];
+        private static int _histNext, _histCount;
+
+        private static void Record(float time, Vector2 gaze)
+        {
+            HistTime[_histNext] = time;
+            HistGaze[_histNext] = gaze;
+            _histNext = (_histNext + 1) % HistorySize;
+            if (_histCount < HistorySize) _histCount++;
+        }
+
+        /// <summary>The newest recorded gaze at or before the given time (the oldest one if all are newer).</summary>
+        private static Vector2 GazeAt(float time)
+        {
+            Vector2 result = _smoothed;
+            for (int i = 1; i <= _histCount; i++)
+            {
+                int idx = (_histNext - i + HistorySize) % HistorySize;
+                result = HistGaze[idx];
+                if (HistTime[idx] <= time) break;
+            }
+            return result;
         }
 
         /// <summary>

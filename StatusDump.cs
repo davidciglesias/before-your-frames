@@ -49,6 +49,7 @@ namespace BYEFrameBlink
             Add("webcamPlaying", WebcamBlock.PlayingWebcamTextures());
             Add("trackerInitsBlocked", WebcamBlock.TrackerInitsBlocked);
             Add("webcamPlaysBlocked", WebcamBlock.PlaysBlocked);
+            Add("webcamWatchersSkipped", WebcamBlock.DisconnectWatchersSkipped);
 
             Quaternion head = HeadTracking.ReadHeadRotation();
             Add("headPitch", head.eulerAngles.x);
@@ -89,6 +90,12 @@ namespace BYEFrameBlink
             Add("veilFullAlpha", Veil.FullAlpha);
             Add("veilFullScreenImages", Veil.FullScreenDarkCount);
             Add("veilOriginalsHidden", Veil.OriginalsHidden);
+            Add("veilBehindPanel", Veil.AllBehindPanel);
+            Add("volumetricOn", Camera.main != null && Camera.main.GetComponent<VolumetricLightRenderer>() is VolumetricLightRenderer vlr && vlr.enabled);
+            Add("ssrOn", Camera.main != null && Camera.main.GetComponent<UnityEngine.PostProcessing.PostProcessingBehaviour>() is UnityEngine.PostProcessing.PostProcessingBehaviour ppb && ppb.profile != null && ppb.profile.screenSpaceReflection.enabled);
+            Add("waterMaterialsChanged", StereoComfort.WaterMaterialsChanged);
+            Add("waterEyeRenders", WaterReflectionVR.EyeRenders);
+            Add("stereoMode", UnityEngine.XR.XRSettings.stereoRenderingMode.ToString());
             Add("overlayLayerExclusive", UiOverlay.OwnLayerExclusive);
 
             Add("introSkipped", IntroSkip.Skipped);
@@ -96,6 +103,8 @@ namespace BYEFrameBlink
             Add("menuActive", MenuGaze.Active);
             Add("menuHover", MenuGaze.HoverName);
             Add("menuClicks", MenuGaze.Clicks);
+            Add("menuHoverDegrees", MenuGaze.HoverDegrees);
+            Add("menuPanelWidth", MenuGaze.PanelWidth);
 
             InteractableManager im = Object.FindObjectOfType<InteractableManager>();
             if (im != null)

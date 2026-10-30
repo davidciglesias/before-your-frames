@@ -44,7 +44,7 @@ namespace BYEFrameBlink
             if (_copy == null) _copy = UiOverlay.CreateSprite("BYE Reticle", 30001);
 
             Canvas canvas = _source.canvas != null ? _source.canvas.rootCanvas : null;
-            bool visible = _source.isActiveAndEnabled && _source.sprite != null && canvas != null;
+            bool visible = Plugin.ShowReticle.Value && _source.isActiveAndEnabled && _source.sprite != null && canvas != null;
             _copy.enabled = visible;
             Drawing = visible;
             if (visible)
@@ -53,7 +53,9 @@ namespace BYEFrameBlink
                 var canvasRt = (RectTransform)canvas.transform;
                 float metersPerUnit = PanelWidth / Mathf.Max(1f, canvasRt.rect.width);
                 Vector3 scaleInCanvas = Vector3.Scale(_source.rectTransform.lossyScale, Inverse(canvasRt.lossyScale));
-                Vector2 sizeMeters = Vector2.Scale(_source.rectTransform.rect.size, scaleInCanvas) * metersPerUnit;
+                float distance = TargetDistance();
+                // Same angular size at any distance.
+                Vector2 sizeMeters = Vector2.Scale(_source.rectTransform.rect.size, scaleInCanvas) * metersPerUnit * (distance / Distance);
 
                 _copy.sprite = _source.sprite;
                 Color c = _source.color;
@@ -67,12 +69,39 @@ namespace BYEFrameBlink
                 // The overlay camera already carries the head rotation; add the gaze.
                 Quaternion gaze = Gaze.LocalRotation;
                 LocalDirection = gaze * Vector3.forward;
-                _copy.transform.localPosition = LocalDirection * Distance;
+                _copy.transform.localPosition = LocalDirection * distance;
                 _copy.transform.localRotation = gaze * Quaternion.Euler(0f, 0f, _source.rectTransform.localEulerAngles.z);
             }
 
             // Hide the original (its CanvasRenderer alpha isn't animated by the game).
             _source.canvasRenderer.SetAlpha(0f);
+        }
+
+        private const float MinDistance = 0.15f, MaxDistance = 20f;
+        private const int InteractableMask = 79667; // InteractableManager._layerMask
+        private static float _distance = Distance;
+
+        /// <summary>
+        /// Distance (meters, as you see it) to whatever the aim ray hits, smoothed. A dot drawn at a fixed 2 m doubles
+        /// when you focus on something close. Interactables first (incl. triggers, as the game aims), then solid geometry.
+        /// </summary>
+        private static float TargetDistance()
+        {
+            if (!Plugin.ReticleAtTargetDepth.Value) return _distance = Distance;
+            Camera cam = Camera.main;
+            if (cam == null) return _distance;
+            Ray ray = Gaze.ViewportPointToRay(cam, new Vector3(0.5f, 0.5f, 0f));
+            float target = Distance;
+            if (Physics.Raycast(ray, out RaycastHit hit, 100f, InteractableMask, QueryTriggerInteraction.Collide) ||
+                Physics.Raycast(ray, out hit, 100f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                // A smaller eye separation makes the world look proportionally farther away.
+                float scale = StereoComfort.Patched ? Mathf.Clamp(Plugin.EyeSeparationScale.Value, 0.05f, 2f) : 1f;
+                target = Mathf.Clamp(hit.distance / scale, MinDistance, MaxDistance);
+            }
+            float k = 1f - Mathf.Exp(-Time.unscaledDeltaTime / 0.08f);
+            _distance = Mathf.Lerp(_distance, target, k);
+            return _distance;
         }
 
         private static void Release()

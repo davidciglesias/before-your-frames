@@ -79,6 +79,8 @@ switch ($Cmd) {
     }
     'recenter' { Send '/bye/recenter' }
     'shot'     { SendString '/bye/shot' ($Rest -join ' ') }
+    'overlayshot' { SendString '/bye/overlayshot' ($Rest -join ' ') }
+    'followers' { SendString '/bye/followers' ($Rest -join ' ') }
     'buttons'  { SendString '/bye/buttons' '' }
     'scenes'   { SendString '/bye/scenes' '' }
     'addrs'    { SendString '/bye/addrs' '' }
@@ -89,6 +91,7 @@ switch ($Cmd) {
     'rayall'   { SendString '/bye/rayall' '' }
     'ias'      { SendString '/bye/ias' '' }
     'gazetargets' { SendString '/bye/gazetargets' '' }
+    'menucands' { SendString '/bye/menucands' '' }
     'aimat'    { SendString '/bye/aimat' ($Rest -join ' ') }
     'menuaim'  { SendString '/bye/menuaim' ($Rest -join ' ') }
     'autoplay' { SendString '/bye/autoplay' ($Rest -join ' ') }

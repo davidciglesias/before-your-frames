@@ -1,3 +1,4 @@
+using System.Linq;
 using HarmonyLib;
 using UnityEngine;
 
@@ -14,6 +15,7 @@ namespace BYEFrameBlink
     {
         public static int TrackerInitsBlocked;
         public static int PlaysBlocked;
+        public static int DisconnectWatchersSkipped;
 
         private static bool Prefix()
         {
@@ -33,6 +35,40 @@ namespace BYEFrameBlink
             }
             PlaysBlocked++;
             if (PlaysBlocked == 1) Plugin.Log.LogInfo("Blocked WebCamTexture.Play() (Block Webcam = true).");
+        }
+
+        /// <summary>
+        /// CheckCamConnection fires CamNotConnected when WebCamTexture.devices is empty, which shows the game's
+        /// "No Webcam Detected" warning on PCs without a webcam. Blinks come from the headset, so report it as connected.
+        /// </summary>
+        [HarmonyPatch(typeof(CheckCamConnection), "OnEnable")]
+        private static class NoCamWarning
+        {
+            private static bool Prefix(CheckCamConnection __instance)
+            {
+                if (!Plugin.BlockWebcam.Value) return true;
+                Plugin.Log.LogInfo($"Skipped the webcam connection check on '{__instance.name}' (Block Webcam = true).");
+                __instance.CamConnected?.Invoke();
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// UlseeBlinkDetect_v2.Start runs a coroutine that checks every 2.5 s whether its webcam is still plugged in and
+        /// otherwise shows "Webcam detection lost. Please exit the game..." (and pauses the tracker). With the webcam
+        /// blocked there is no camera to lose, so never start it.
+        /// </summary>
+        [HarmonyPatch(typeof(UlseeBlinkDetect_v2), "WatchForWebcamDisconnect1")]
+        private static class NoDisconnectWatch
+        {
+            private static bool Prefix(ref System.Collections.IEnumerator __result)
+            {
+                if (!Plugin.BlockWebcam.Value) return true;
+                __result = Enumerable.Empty<object>().GetEnumerator();
+                DisconnectWatchersSkipped++;
+                Plugin.Log.LogInfo("Skipped the webcam disconnect watcher (Block Webcam = true).");
+                return false;
+            }
         }
 
         public static int PlayingWebcamTextures()

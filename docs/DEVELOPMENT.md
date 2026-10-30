@@ -28,6 +28,12 @@ The plugin runs alongside UUVR and does two things:
 - **Full-view eyelids and fades.** The game darkens the screen with UI images: the sliding eyelids, `SceneTransFadePanel`, and menu backdrops.
   - In VR those only covered UUVR's panel. The plugin mirrors each one as a head-locked sprite, with the canvas stretched to your whole field of view, and hides the original.
   - The sprites use their own unused layer. UUVR's UI capture camera also renders the UI layer into the panel, which would otherwise draw them a second time.
+- **Comfort** (`StereoComfort.cs`):
+  - *Eye separation.* A postfix on UUVR's `VrCamera.UpdateRelativeMatrix` pulls each eye's view matrix toward the midpoint of the two (element-wise; both eyes share a rotation), scaling the stereo baseline by `Eye Separation Scale`.
+  - *Depth of field.* The main camera's `PostProcessingBehaviour.profile.depthOfField` is switched off every frame (scenes clone their profile, and some scripts re-enable it).
+  - *Squint.* `BlinkCanvasManager.Squint(true)` (lids rise while the end-of-scene blink is on deck) and its matching `Squint(false)` are skipped unless `Squint When Blink Ready`.
+  - *Reticle depth.* The head-locked reticle is placed at the aim ray's hit distance (interactables first, then solid geometry), divided by the eye separation scale, and scaled to keep its angular size.
+- **No-webcam warning.** `CheckCamConnection.OnEnable` fires `CamConnected` instead of checking `WebCamTexture.devices` when `Block Webcam` is on.
 - **Webcam blocked.** `Block Webcam` skips the ULSee tracker init (it opens the camera natively) and IL-redirects the game's `WebCamTexture.Play()` calls to a no-op.
 - **UUVR setting.** `UI Patch Mode = CanvasRedirect`, set in `raicuparta.uuvr-legacy.cfg`. The default Mirror mode copied the whole black desktop frame onto the UI panel.
 

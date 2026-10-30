@@ -18,6 +18,10 @@ namespace BYEFrameBlink
     {
         private const float Distance = 0.5f; // meters in front of the eyes (overlay camera near clip is 0.3)
 
+        // Sprites sort before UUVR's UI panel quad (order 0) by sorting order, whatever their render queue, so the
+        // panel (menu text, dialogs, HUD icons) draws over the veils. A positive order hid a quit dialog under its backdrop.
+        private const int BehindPanelOrder = -1000;
+
         private sealed class Mirror
         {
             public Image Source;
@@ -39,6 +43,17 @@ namespace BYEFrameBlink
         public static bool Ready => _active;
         public static int FullScreenDarkCount => Mirrors.Count - (_lids != null ? 2 : 0);
         public static bool OriginalsHidden { get; private set; }
+
+        /// <summary>For tests: every mirrored veil draws before (under) UUVR's UI panel.</summary>
+        public static bool AllBehindPanel
+        {
+            get
+            {
+                foreach (Mirror m in Mirrors)
+                    if (m.Copy != null && m.Copy.sortingOrder >= 0) return false;
+                return true;
+            }
+        }
 
         /// <summary>Debug: force a full-view veil of this opacity until the given time.</summary>
         public static float ForcedAlpha;
@@ -74,7 +89,7 @@ namespace BYEFrameBlink
                 Canvas canvas = src.canvas != null ? src.canvas.rootCanvas : null;
                 bool on = src.isActiveAndEnabled && canvas != null && canvas.renderMode != RenderMode.WorldSpace;
                 float alpha = on ? src.color.a * GroupAlpha(src) : 0f;
-                if (m.Copy == null) m.Copy = UiOverlay.CreateSprite("BYE Veil " + src.name, 30000 + Mirrors.IndexOf(m));
+                if (m.Copy == null) m.Copy = UiOverlay.CreateSprite("BYE Veil " + src.name, BehindPanelOrder + Mirrors.IndexOf(m));
                 m.Copy.enabled = alpha > 0.001f;
 
                 if (on)

@@ -1,4 +1,4 @@
-* text=auto
+* text=auto eol=crlf
 *.dll binary
 *.pdb binary
 *.png binary

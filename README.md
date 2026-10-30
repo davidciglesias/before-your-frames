@@ -8,7 +8,8 @@ Play **Before Your Eyes** in VR on a **Steam Frame**, with your real blinks and 
 - **Gaze aiming.** You select things by looking at them, not by pointing your head.
 - **Blink menus.** In the main and pause menus you look at a button and blink to press it.
 - **Full-view eyelids and fades.** The game's eyelid animation and screen fades cover your whole field of view, not just a small panel.
-- **Head-locked reticle** that follows where you look, and a small **aim assist** so tiny targets are easier to hit.
+- **Head-locked reticle** that follows where you look (and can be hidden), and a small **aim assist** so tiny targets are easier to hit.
+- **Comfort options** for close-up scenes: smaller eye separation, no depth-of-field blur.
 - **Optional head position tracking** (off by default; the game is built around a fixed viewpoint).
 - **The webcam is never used.** The game's tracker is bypassed, so you get no camera prompts and no calibration.
 
@@ -73,9 +74,12 @@ Allow **UDP 9000 inbound** in the Windows firewall (private network) for the gam
 
 | Key | Action |
 |---|---|
-| F6 | Recenter head position (do this once you're seated) |
+| F6 | Recenter: the direction you're facing becomes straight ahead (also resets head position) |
+| Shift+F6 | Turn automatic recentering at the start of each scene on/off |
 | F8 | Debug overlay: OSC packet count and live eyelid values |
 | F9 | Hold to act as eyes closed |
+| F10 | Show/hide the aiming dot during gameplay (menus always show their cursor) |
+| F11 | Cycle the world size: real, a bit bigger, bigger (default), much bigger (see Comfort below) |
 
 ## Settings
 
@@ -87,14 +91,27 @@ All settings are in `BepInEx\config\byeframeblink.cfg`; the defaults should work
 - **Aim feels jittery or laggy:** change `Smoothing Seconds`.
 - **Targets are hard to hit:** raise `Aim Assist Degrees` (3 by default, 0 turns it off).
 - **Head position:** set `Positional Tracking = true`. `Position Scale` scales the movement.
-- **Menu presses:** `Menu Blink Seconds` (0.3) is how long a deliberate blink must last. Natural blinks are ignored.
+- **Recentering:** `Recenter On Scene Start` (default on) makes the direction you're facing straight ahead at the start of every scene, since each scene is framed for that view. F6 does it any time, and Shift+F6 turns this on or off in game. These keys and F10/F11 show a short message in your view.
+- **Menus:** look roughly at an option and do a deliberate blink. The option nearest to where you look is selected if it is within `Menu Snap Degrees` (8; Back buttons reach further), and while a menu is open its panel is drawn `Menu Panel Scale` (1.5×) bigger so options are spread apart. `Menu Blink Seconds` (0.3) is how long the press blink must last; natural blinks are ignored.
 - **Intro:** `Skip Intro Logos` skips the splash screens after the first launch.
+- **Aiming dot:** `Show Reticle` (F10 toggles it). `Reticle At Target Depth` draws the dot at the distance of what you look at, so it doesn't split in two when you focus on something close.
+
+### Comfort
+
+The game was framed for a flat screen, and many scenes put objects a few centimetres from the camera, closer than your eyes can comfortably focus in a headset.
+
+- **World size** (F11 in game: real, a bit bigger, bigger, much bigger). Making the world look bigger pushes close objects farther away, so they are easier to focus on. Default: bigger. In the config file this is `Eye Separation Scale` (1, 0.8, 0.6, 0.4; 1 is real size).
+- `Disable Depth Of Field` (default on) removes the game's focus blur; in VR your eyes do the focusing.
+- Some of the game's effects are drawn for the flat camera and in a headset stick to your view as you turn your head. These are off by default: `Disable Volumetric Lights` (light shafts and haze), `Disable Screen Space Reflections`, and `Disable Water Reflections` (the water then reflects a plain sky colour). The water keeps its soft edges and light absorption (`Disable Water Edge Blend` and `Disable Water Light Absorption` default to off; turn them on if those move with your view in some scene).
+- `Squint When Blink Ready` (default off): in the flat game the eyelids rise a little when a scene-ending blink is ready, which in VR shows up as a grey band at the edge of your view. The metronome icon still tells you.
 
 ## Troubleshooting
 
 - **Nothing happens when I blink.** Press F8. If "OSC packets" stays at 0, the headset's data isn't arriving: check the target address and port, the firewall, and that both are on the same network. If packets arrive but "Lid L/R" doesn't move, check the addresses in the `[OSC]` section.
 - **The screen is black or shows the desktop.** Check `UI Patch Mode = CanvasRedirect` in the UUVR config.
+- **Menu options are hard to select, or the desktop window shows debug panels.** Rai Pal may also have installed *Unity Explorer*, a modding tool whose windows sit on the desktop window. This plugin ignores them, but for normal play you can uninstall Unity Explorer for this game in Rai Pal (or press F7 to hide its windows).
 - **The camera asks for access / calibration appears.** Make sure `Force Click Blink Mode` and `Block Webcam` are `true`.
+- **A "no webcam" warning appears when you start playing.** The game checks for a webcam even though this mod never uses one. With `Block Webcam = true` the plugin skips that check; if a warning still shows up, you can ignore it (blinks come from the headset) and please open an issue with a photo of it.
 - **Aim is off after a headset update.** frameeyeosc may need an update; try `Invert X/Y` and the offsets in the meantime.
 
 The BepInEx log is `BepInEx\LogOutput.log`; attach it to bug reports.

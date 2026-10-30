@@ -112,15 +112,47 @@ try {
             $after = Status "$tag-press"
             return @($before, $after)
         }
+        # Snapping: aiming near (not on) a button still selects it; far away selects nothing. Aim only, never blink here.
+        & $Sim menuaim 'Quit Button|3'; [Threading.Thread]::Sleep(700)
+        $sn = Status 'snap-near'
+        Check 'menu panel enlarged while in a menu' (Near $sn.menuPanelWidth 2.7 0.05) "width=$($sn.menuPanelWidth)"
+        Check 'menu: 3 deg below a button still selects it' ($sn.menuHover -eq 'Quit Button') "hover=$($sn.menuHover) deg=$($sn.menuHoverDegrees)"
+        & $Sim menuaim 'Quit Button|14'; [Threading.Thread]::Sleep(700)
+        $sf = Status 'snap-far'
+        Check 'menu: 14 deg away selects nothing' ($sf.menuHover -eq '') "hover=$($sf.menuHover) deg=$($sf.menuHoverDegrees)"
         $r = MenuPress 'Chapters Button' 'chap'
         Check 'gaze+blink opens Chapters' (($r[0].menuHover -eq 'Chapters Button') -and ($r[1].menuClicks -eq $r[0].menuClicks + 1)) "hover=$($r[0].menuHover) clicks=$($r[1].menuClicks)"
+        # The chapter next to Back must stay selectable (Back's longer reach mustn't steal it). Highest unlocked chapter.
+        & $Sim buttons
+        $last = $null
+        for ($i = 0; $i -lt 10 -and -not $last; $i++) {
+            [Threading.Thread]::Sleep(500)
+            $last = (Select-String -Path $Log -Pattern '\[cmd\] button .*\((Chapter \d+ Button)\)' | ForEach-Object { $_.Matches[0].Groups[1].Value } |
+                Sort-Object { [int]($_ -replace '\D', '') } | Select-Object -Last 1)
+        }
+        Check 'chapter buttons listed' ([bool]$last) "last=$last"
+        if ($last) {
+            & $Sim menuaim $last; [Threading.Thread]::Sleep(700)
+            $lc = Status 'last-chapter'
+            Check "menu: last chapter ($last) selectable next to Back" ($lc.menuHover -eq $last) "hover=$($lc.menuHover)"
+        }
         $r = MenuPress 'Chapter 1 Button' 'chap1'
         Check 'gaze+blink picks a chapter' (($r[0].menuHover -eq 'Chapter 1 Button') -and ($r[1].menuClicks -eq $r[0].menuClicks + 1)) "hover=$($r[0].menuHover)"
         $r = MenuPress 'No_Button' 'confirm'
         Check 'confirm dialog is gaze-targetable (No)' ($r[0].menuHover -eq 'No_Button') "hover=$($r[0].menuHover)"
         Check 'gaze+blink No closes the dialog, stays in menu' (($r[1].menuClicks -eq $r[0].menuClicks + 1) -and ($r[1].scenes -match 'MainMenu') -and -not ($r[1].scenes -match '_CodaMain')) "clicks=$($r[1].menuClicks) scenes=$($r[1].scenes)"
+        & $Sim menuaim 'Back_Button|3'; [Threading.Thread]::Sleep(700)
+        $bn = Status 'back-near'
+        Check 'menu: 3 deg off Back still selects Back' ($bn.menuHover -eq 'Back_Button') "hover=$($bn.menuHover) deg=$($bn.menuHoverDegrees)"
         $r = MenuPress 'Back_Button' 'back'
         Check 'gaze+blink Back returns to main menu' ($r[1].menuClicks -eq $r[0].menuClicks + 1) "hover=$($r[0].menuHover)"
+        [Threading.Thread]::Sleep(800)
+        & $Sim click settings; [Threading.Thread]::Sleep(1500)
+        & $Sim menuaim 'Dropdown_gray'; [Threading.Thread]::Sleep(700)
+        $dd = Status 'settings-dropdown'
+        Check 'menu: dropdowns are not gaze targets' ($dd.menuHover -ne 'Dropdown_gray') "hover=$($dd.menuHover)"
+        $r = MenuPress 'Back Button' 'settings-back'
+        Check 'gaze+blink Back leaves Settings' ($r[1].menuClicks -eq $r[0].menuClicks + 1) "hover=$($r[0].menuHover)"
         [Threading.Thread]::Sleep(800)
 
         $label = if ($canContinue) { 'continue' } else { 'new game' }
@@ -181,6 +213,7 @@ try {
     Check 'no data -> eyes open (fail-safe)' ((-not [bool]$g.lidHasData) -and (-not [bool]$g.eyesClosed))
 
     # ---------------------------------------------------------------- gaze aiming + reticle
+    Cfg 'VR' 'Show Reticle' 'true'; [Threading.Thread]::Sleep(300)
     $h = Status 'no-gaze'
     Check 'no gaze data -> center aim' ((-not [bool]$h.gazeActive) -and (Near $h.aimAngleFromCenter 0 0.5)) "active=$($h.gazeActive) angle=$($h.aimAngleFromCenter)"
     Check 'UUVR UI overlay camera found' ([bool]$h.uiOverlayCamera)
@@ -211,6 +244,13 @@ try {
     Repeat-Send { & $Sim lid 0.05; & $Sim gaze -0.4 0 } 0.4
     $k = Status 'gaze-during-blink'
     Check 'gaze frozen while eyes closed' (Near $k.gazeYaw 18 1.5) "gazeYaw=$($k.gazeYaw)"
+    # ...and rewind to where you looked just before the lids closed (eyes drift while closing).
+    [Threading.Thread]::Sleep(1500) # gaze + lid time out
+    Repeat-Send { & $Sim gaze 0.4 0; & $Sim lid 0.8 } 0.6
+    Repeat-Send { & $Sim gaze -0.4 0; & $Sim lid 0.8 } 0.1
+    Repeat-Send { & $Sim lid 0.05; & $Sim gaze -0.4 0 } 0.4
+    $kr = Status 'gaze-rewind'
+    Check 'blink aims where you looked before the lids closed' (Near $kr.gazeYaw 18 3) "gazeYaw=$($kr.gazeYaw)"
 
     # Reticle is head-locked: turning the head without gaze keeps it at view center (where the aim ray is).
     [Threading.Thread]::Sleep(1500) # gaze + lid time out
@@ -238,16 +278,25 @@ try {
     Check 'veil ready' ([bool]$v.veilReady)
     Check 'veil mirrors fades/backdrops too' ($v.veilFullScreenImages -ge 1) "count=$($v.veilFullScreenImages)"
     Check 'original lids/fades hidden on UI panel' ([bool]$v.veilOriginalsHidden)
+    Check 'veils draw under the UI panel (menus/dialogs stay visible)' ([bool]$v.veilBehindPanel)
+    Check 'volumetric light effect off in VR (it would stick to the view)' (-not [bool]$v.volumetricOn)
     Check 'overlay sprites only rendered by overlay camera (not into UI panel)' ([bool]$v.overlayLayerExclusive)
     $openUpperOk = ($v.veilUpperAlpha -lt 0.01) -or ($v.veilUpperEdge -ge 0.45)
     $openLowerOk = ($v.veilLowerAlpha -lt 0.01) -or ($v.veilLowerEdge -le -0.45)
     Check 'eyes open -> veil clear of view center' ($openUpperOk -and $openLowerOk) "upper=$($v.veilUpperEdge)@$($v.veilUpperAlpha) lower=$($v.veilLowerEdge)@$($v.veilLowerAlpha)"
+    Cfg 'VR' 'Squint When Blink Ready' 'false'
+    & $Sim invoke 'BlinkCanvasManager.Squint:true'; [Threading.Thread]::Sleep(1500)
+    $vn = Status 'veil-nosquint'
+    Check 'squint suppressed by default -> veil stays clear' ((($vn.veilUpperAlpha -lt 0.01) -or ($vn.veilUpperEdge -ge 0.45)) -and (($vn.veilLowerAlpha -lt 0.01) -or ($vn.veilLowerEdge -le -0.45))) "upper=$($vn.veilUpperEdge)@$($vn.veilUpperAlpha) lower=$($vn.veilLowerEdge)@$($vn.veilLowerAlpha)"
+    & $Sim invoke 'BlinkCanvasManager.Squint:false'; [Threading.Thread]::Sleep(300)
+    Cfg 'VR' 'Squint When Blink Ready' 'true'
     & $Sim invoke 'BlinkCanvasManager.Squint:true'; [Threading.Thread]::Sleep(1500)
     $vs = Status 'veil-squint'
     Check 'squint -> lids move in and veil follows' (($vs.veilUpperAlpha -gt 0.5) -and ($vs.veilUpperEdge -lt 0.45) -and ($vs.veilLowerEdge -gt -0.45)) "upper=$($vs.veilUpperEdge)@$($vs.veilUpperAlpha) lower=$($vs.veilLowerEdge)@$($vs.veilLowerAlpha)"
     & $Sim invoke 'BlinkCanvasManager.Squint:false'; [Threading.Thread]::Sleep(1500)
     $vo = Status 'veil-unsquint'
     Check 'unsquint -> veil clears again' ((($vo.veilUpperAlpha -lt 0.01) -or ($vo.veilUpperEdge -ge 0.45)) -and (($vo.veilLowerAlpha -lt 0.01) -or ($vo.veilLowerEdge -le -0.45))) "upper=$($vo.veilUpperEdge) lower=$($vo.veilLowerEdge)"
+    Cfg 'VR' 'Squint When Blink Ready' 'false'
 
     # ---------------------------------------------------------------- positional tracking
     & $Sim head 0 0 0 0 0 0; & $Sim recenter; [Threading.Thread]::Sleep(300)
@@ -262,6 +311,7 @@ try {
 
     $z = Status 'final'
     Check 'webcam still off at end' ($z.webcamPlaying -eq 0) "webcamPlaying=$($z.webcamPlaying)"
+    Check 'no "webcam detection lost" watcher in gameplay' ([int]$z.webcamWatchersSkipped -ge 1) "skipped=$($z.webcamWatchersSkipped)"
 }
 catch {
     Check 'test run aborted' $false $_.Exception.Message
@@ -271,7 +321,7 @@ finally {
     if (Test-Path $CfgBackup) {
         if (Get-Process 'Before Your Eyes' -ErrorAction SilentlyContinue) {
             $orig = Get-Content $CfgBackup
-            foreach ($pair in @(@('Head Tracking', 'Simulate Head'), @('Head Tracking', 'Positional Tracking'), @('Debug', 'Test Mode'))) {
+            foreach ($pair in @(@('Head Tracking', 'Simulate Head'), @('Head Tracking', 'Positional Tracking'), @('Debug', 'Test Mode'), @('VR', 'Show Reticle'), @('VR', 'Squint When Blink Ready'))) {
                 $line = $orig | Where-Object { $_ -match "^$([regex]::Escape($pair[1])) = " } | Select-Object -First 1
                 if ($line) { Cfg $pair[0] $pair[1] ($line -split ' = ', 2)[1] }
             }

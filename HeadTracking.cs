@@ -35,11 +35,72 @@ namespace BYEFrameBlink
             Plugin.Log.LogInfo("Patched UUVR pose driver for positional tracking.");
         }
 
-        public static void Recenter()
+        /// <summary>
+        /// Yaw applied to every head pose read through InputTracking (UUVR's pose drivers, the UI overlay camera and
+        /// our aim all read it there), so "straight ahead" can be reset to wherever you're facing. Not with SimHead,
+        /// whose poses AutoPlay sets directly.
+        /// </summary>
+        private static Quaternion _yawOffset = Quaternion.identity;
+
+        public static void PatchRecenter(Harmony harmony)
         {
+            try
+            {
+                harmony.Patch(AccessTools.Method(typeof(InputTracking), nameof(InputTracking.GetLocalRotation)),
+                    postfix: new HarmonyMethod(AccessTools.Method(typeof(HeadTracking), nameof(GetLocalRotationPostfix))));
+                harmony.Patch(AccessTools.Method(typeof(InputTracking), nameof(InputTracking.GetLocalPosition)),
+                    postfix: new HarmonyMethod(AccessTools.Method(typeof(HeadTracking), nameof(GetLocalPositionPostfix))));
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"Could not patch InputTracking for view recentering: {e.Message}");
+            }
+        }
+
+        private static readonly GameManager.SceneEventHandler SceneBeginHandler = OnSceneBegin;
+        private static float _nextHookCheck;
+
+        /// <summary>GameManager clears its static events in OnDisable (e.g. back to the main menu), so re-subscribe as needed.</summary>
+        public static void EnsureSceneHook()
+        {
+            if (Time.unscaledTime < _nextHookCheck) return;
+            _nextHookCheck = Time.unscaledTime + 1f;
+            Delegate current = GameManager.OnSceneBegin;
+            if (current != null && Array.IndexOf(current.GetInvocationList(), SceneBeginHandler) >= 0) return;
+            GameManager.OnSceneBegin = (GameManager.SceneEventHandler)Delegate.Combine(GameManager.OnSceneBegin, SceneBeginHandler);
+        }
+
+        // UUVR's pose drivers read CenterEye (node 2), our aim reads Head: offset all head/eye nodes alike.
+        private static bool IsHeadNode(XRNode node) =>
+            node == XRNode.Head || node == XRNode.CenterEye || node == XRNode.LeftEye || node == XRNode.RightEye;
+
+        private static void GetLocalRotationPostfix(XRNode node, ref Quaternion __result)
+        {
+            if (IsHeadNode(node) && !SimHead.Active) __result = _yawOffset * __result;
+        }
+
+        private static void GetLocalPositionPostfix(XRNode node, ref Vector3 __result)
+        {
+            if (IsHeadNode(node) && !SimHead.Active) __result = _yawOffset * __result;
+        }
+
+        private static void OnSceneBegin()
+        {
+            if (Plugin.RecenterOnSceneStart.Value && !SimHead.Active) Recenter(quiet: true);
+        }
+
+        /// <summary>Makes the current facing direction (yaw only) straight ahead, and the current head position the origin.</summary>
+        public static void Recenter(bool quiet = false)
+        {
+            if (!SimHead.Active)
+            {
+                Quaternion raw = Quaternion.Inverse(_yawOffset) * InputTracking.GetLocalRotation(XRNode.Head);
+                _yawOffset = Quaternion.Euler(0f, -raw.eulerAngles.y, 0f);
+            }
             _origin = ReadHeadPosition();
             _hasOrigin = true;
-            Plugin.Log.LogInfo($"Recentered head position at {_origin:F3}.");
+            if (!quiet) Toast.Show("View recentered");
+            Plugin.Log.LogInfo($"Recentered view (yaw offset {_yawOffset.eulerAngles.y:F0}) and head position at {_origin:F3}.");
         }
 
         public static Vector3 ReadHeadPosition() =>
@@ -69,7 +130,8 @@ namespace BYEFrameBlink
             if (!_hasOrigin)
             {
                 if (pos == Vector3.zero && !SimHead.Active) return; // tracking not ready yet
-                Recenter();
+                _origin = pos;
+                _hasOrigin = true;
             }
             t.localPosition = (pos - _origin) * Plugin.PositionScale.Value;
         }

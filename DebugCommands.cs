@@ -48,7 +48,10 @@ namespace BYEFrameBlink
             switch (address)
             {
                 case "/bye/shot": Screenshot(arg); break;
+                case "/bye/overlayshot": OverlayShot(arg); break;
+                case "/bye/followers": Followers(arg); break;
                 case "/bye/buttons": ListButtons(); break;
+                case "/bye/menucands": MenuGaze.DumpCandidates(); break;
                 case "/bye/click": Click(arg); break;
                 case "/bye/invoke": Invoke(arg); break;
                 case "/bye/addrs":
@@ -88,6 +91,14 @@ namespace BYEFrameBlink
                     var seq = gm._scenePrefabSequence._scenePrefabs;
                     int idx = seq.FindIndex(n => string.Equals(n, arg, StringComparison.OrdinalIgnoreCase));
                     if (idx < 0) idx = seq.FindIndex(n => n.IndexOf(arg, StringComparison.OrdinalIgnoreCase) >= 0);
+                    // Drop the scene the game already preloaded (and any preload still running), or the next scene change
+                    // after the jump loads that one and the sequence plays a scene twice.
+                    var gmt = HarmonyLib.Traverse.Create(gm);
+                    var preload = gmt.Field("preloadCrt").GetValue<Coroutine>();
+                    if (preload != null) gm.StopCoroutine(preload);
+                    gmt.Field("preloadCrt").SetValue(null);
+                    gmt.Field("loadingStageScene").SetValue(null);
+                    gmt.Field("immediateLoadScene").SetValue(null);
                     if (idx > 0)
                     {
                         gm._currentSceneId = idx;
@@ -131,13 +142,19 @@ namespace BYEFrameBlink
                     break;
                 }
                 case "/bye/menuaim":
-                    if (MenuGaze.TryAimAt(arg, out Quaternion rot))
+                {
+                    // "label" aims at the button's centre; "label|N" aims N degrees below its bottom edge.
+                    string[] parts = (arg ?? "").Split('|');
+                    float below = parts.Length > 1 && float.TryParse(parts[1], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out float d) ? d : 0f;
+                    if (MenuGaze.TryAimAt(parts[0], out Quaternion rot, below))
                     {
                         SimHead.SetRotation(rot);
                         Plugin.Log.LogInfo($"[cmd] menuaim '{arg}' -> {rot.eulerAngles:F1}");
                     }
                     else Plugin.Log.LogWarning($"[cmd] menuaim: no button '{arg}'");
                     break;
+                }
                 case "/bye/autoplay":
                     if (arg == "on") AutoPlay.Set(true);
                     else if (arg == "off") AutoPlay.Set(false);
@@ -162,6 +179,107 @@ namespace BYEFrameBlink
                         Plugin.Log.LogInfo($"[cmd] scene {i}: {SceneManager.GetSceneAt(i).name}");
                     break;
                 default: Plugin.Log.LogWarning($"[cmd] unknown command {address}"); break;
+            }
+        }
+
+        /// <summary>
+        /// Renders only UUVR's UI overlay camera (UI panel + our head-locked sprites: veils, reticle, cursor, toasts) in
+        /// mono to a PNG, black where nothing is drawn. Shows what covers the view, which the eye screenshots can miss.
+        /// </summary>
+        private static void OverlayShot(string name)
+        {
+            Camera cam = UiOverlay.Camera;
+            if (cam == null) { Plugin.Log.LogWarning("[cmd] overlayshot: no overlay camera"); return; }
+            string dir = Path.Combine(Paths.BepInExRootPath, "BYEFrameBlink_shots");
+            Directory.CreateDirectory(dir);
+            string path = Path.Combine(dir, (string.IsNullOrEmpty(name) ? "overlay" : name) + ".png");
+            var rt = new RenderTexture(1600, 900, 24);
+            RenderTexture prevTarget = cam.targetTexture, prevActive = RenderTexture.active;
+            StereoTargetEyeMask prevEye = cam.stereoTargetEye;
+            CameraClearFlags prevClear = cam.clearFlags;
+            Color prevBg = cam.backgroundColor;
+            float prevFov = cam.fieldOfView;
+            try
+            {
+                cam.stereoTargetEye = StereoTargetEyeMask.None;
+                cam.targetTexture = rt;
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = new Color(0.5f, 0f, 0.5f, 1f); // magenta-ish = nothing drawn
+                cam.fieldOfView = 90f;
+                cam.Render();
+                RenderTexture.active = rt;
+                var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
+                tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+                tex.Apply();
+                File.WriteAllBytes(path, tex.EncodeToPNG());
+                UnityEngine.Object.Destroy(tex);
+                Plugin.Log.LogInfo($"[cmd] overlayshot -> {path}");
+            }
+            finally
+            {
+                cam.targetTexture = prevTarget;
+                cam.stereoTargetEye = prevEye;
+                cam.clearFlags = prevClear;
+                cam.backgroundColor = prevBg;
+                cam.fieldOfView = prevFov;
+                RenderTexture.active = prevActive;
+                rt.Release();
+                UnityEngine.Object.Destroy(rt);
+            }
+        }
+
+        private static readonly Dictionary<Transform, Pose> FollowerSnap = new Dictionary<Transform, Pose>();
+
+        /// <summary>
+        /// "snap" records every light, particle system and their scripts' transforms; "diff" logs the ones that moved
+        /// since (turn the head in between to find scene objects that follow the view/aim).
+        /// </summary>
+        private static void Followers(string mode)
+        {
+            var transforms = new HashSet<Transform>();
+            foreach (Light l in UnityEngine.Object.FindObjectsOfType<Light>()) transforms.Add(l.transform);
+            foreach (ParticleSystem p in UnityEngine.Object.FindObjectsOfType<ParticleSystem>()) transforms.Add(p.transform);
+            if (mode == "list")
+            {
+                foreach (ParticleSystemRenderer r in UnityEngine.Object.FindObjectsOfType<ParticleSystemRenderer>())
+                    Plugin.Log.LogInfo($"[cmd] particles {r.name} enabled={r.enabled} renderMode={r.renderMode} alignment={r.alignment} material={(r.sharedMaterial != null ? r.sharedMaterial.name + "/" + r.sharedMaterial.shader.name : "none")}");
+                foreach (Light l in UnityEngine.Object.FindObjectsOfType<Light>())
+                    Plugin.Log.LogInfo($"[cmd] light {l.name} type={l.type} parent={(l.transform.parent != null ? l.transform.parent.name : "-")} flare={(l.flare != null)}");
+                foreach (LensFlare f in UnityEngine.Object.FindObjectsOfType<LensFlare>())
+                    Plugin.Log.LogInfo($"[cmd] lensflare {f.name}");
+                Camera main = Camera.main;
+                if (main != null)
+                    Plugin.Log.LogInfo($"[cmd] main camera components: {string.Join(",", main.GetComponents<Behaviour>().Select(c => c.GetType().Name + (c.enabled ? "" : "(off)")).ToArray())}");
+                foreach (Renderer r in UnityEngine.Object.FindObjectsOfType<Renderer>())
+                {
+                    if (r is ParticleSystemRenderer || r.sharedMaterial == null) continue;
+                    string shader = r.sharedMaterial.shader.name;
+                    if (shader.IndexOf("Particle", StringComparison.OrdinalIgnoreCase) >= 0 || shader.IndexOf("Billboard", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        r.name.IndexOf("light", StringComparison.OrdinalIgnoreCase) >= 0 || r.name.IndexOf("glow", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        r.GetComponents<MonoBehaviour>().Any(m => m != null && m.GetType().Name.IndexOf("Billboard", StringComparison.OrdinalIgnoreCase) >= 0 || m != null && m.GetType().Name.IndexOf("LookAt", StringComparison.OrdinalIgnoreCase) >= 0))
+                        Plugin.Log.LogInfo($"[cmd] renderer {r.name} shader={shader} scripts={string.Join(",", r.GetComponents<MonoBehaviour>().Where(m => m != null).Select(m => m.GetType().Name).ToArray())}");
+                }
+                return;
+            }
+            if (mode == "snap")
+            {
+                FollowerSnap.Clear();
+                foreach (Transform t in transforms) FollowerSnap[t] = new Pose(t.position, t.rotation);
+                Plugin.Log.LogInfo($"[cmd] followers snap: {FollowerSnap.Count} lights/particles");
+                return;
+            }
+            foreach (var kv in FollowerSnap)
+            {
+                Transform t = kv.Key;
+                if (t == null) continue;
+                float moved = Vector3.Distance(t.position, kv.Value.position);
+                float turned = Quaternion.Angle(t.rotation, kv.Value.rotation);
+                if (moved < 0.01f && turned < 0.5f) continue;
+                string path = t.name;
+                for (Transform p = t.parent; p != null; p = p.parent) path = p.name + "/" + path;
+                string comps = string.Join(",", t.GetComponents<Component>().Select(c => c.GetType().Name).ToArray());
+                string parentComps = t.parent == null ? "" : string.Join(",", t.parent.GetComponents<MonoBehaviour>().Select(c => c.GetType().Name).ToArray());
+                Plugin.Log.LogInfo($"[cmd] follower {path} moved={moved:F2} turned={turned:F1} comps=[{comps}] parentScripts=[{parentComps}]");
             }
         }
 

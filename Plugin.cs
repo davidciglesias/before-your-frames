@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace BYEFrameBlink
 {
-    [BepInPlugin(Guid, "BYE Frame Blink", "0.1.0")]
+    [BepInPlugin(Guid, "BYE Frame Blink", "0.2.0")]
     [BepInDependency("raicuparta.uuvr-legacy", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
@@ -35,12 +35,14 @@ namespace BYEFrameBlink
         internal static ConfigEntry<bool> PositionalTracking;
         internal static ConfigEntry<float> PositionScale;
         internal static ConfigEntry<bool> SimulateHead;
+        internal static ConfigEntry<bool> RecenterOnSceneStart;
 
         // Gaze
         internal static ConfigEntry<bool> GazeAiming;
         internal static ConfigEntry<float> GazeDegreesPerUnit;
         internal static ConfigEntry<float> GazeSmoothingSeconds;
         internal static ConfigEntry<float> GazeHoldAfterBlink;
+        internal static ConfigEntry<float> GazeRewindSeconds;
         internal static ConfigEntry<bool> GazeInvertX;
         internal static ConfigEntry<bool> GazeInvertY;
         internal static ConfigEntry<float> GazeOffsetYaw;
@@ -54,7 +56,23 @@ namespace BYEFrameBlink
         internal static ConfigEntry<bool> SkipIntro;
         internal static ConfigEntry<bool> IntroSeen;
         internal static ConfigEntry<float> MenuBlinkSeconds;
+        internal static ConfigEntry<float> MenuSnapDegrees;
+        internal static ConfigEntry<float> MenuPanelScale;
         internal static ConfigEntry<float> VeilHalfFovDegrees;
+        internal static ConfigEntry<bool> ShowReticle;
+        internal static ConfigEntry<KeyCode> ReticleToggleKey;
+        internal static ConfigEntry<bool> ReticleAtTargetDepth;
+        internal static ConfigEntry<float> EyeSeparationScale;
+        internal static ConfigEntry<KeyCode> EyeSeparationKey;
+        internal static ConfigEntry<bool> DisableDepthOfField;
+        internal static ConfigEntry<bool> DisableVolumetricLights;
+        internal static ConfigEntry<bool> DisableScreenSpaceReflections;
+        internal static ConfigEntry<bool> DisableWaterEdgeBlend;
+        internal static ConfigEntry<bool> DisableWaterLightAbsorption;
+        internal static ConfigEntry<bool> DisableWaterReflections;
+        internal static ConfigEntry<bool> VrWaterReflections;
+        internal static ConfigEntry<int> WaterReflectionResolution;
+        internal static ConfigEntry<bool> SquintWhenBlinkReady;
 
         // Debug
         internal static ConfigEntry<bool> TraceCsv;
@@ -92,6 +110,8 @@ namespace BYEFrameBlink
             PositionalTracking = Config.Bind("Head Tracking", "Positional Tracking", false,
                 "Adds head position (6DOF) on top of UUVR's rotation-only tracking. Off by default: the game is built around a fixed viewpoint.");
             PositionScale = Config.Bind("Head Tracking", "Position Scale", 1f, "Multiplier for head movement (use if the game world isn't 1 unit = 1 meter).");
+            RecenterOnSceneStart = Config.Bind("Head Tracking", "Recenter On Scene Start", true,
+                "Make the direction you're facing 'straight ahead' at the start of every scene (each scene is framed for that view). F6 does it any time; Shift+F6 toggles this in game.");
             SimulateHead = Config.Bind("Head Tracking", "Simulate Head", false,
                 "Debug: replace the real HMD pose with a simulated one (keyboard IJKL/UO move, arrows rotate, or OSC /bye/head).");
 
@@ -99,6 +119,8 @@ namespace BYEFrameBlink
             GazeDegreesPerUnit = Config.Bind("Gaze", "Degrees Per Unit", 45f, "Gaze angle for an OSC value of 1.0 (frameeyeosc/VRCFT: 45).");
             GazeSmoothingSeconds = Config.Bind("Gaze", "Smoothing Seconds", 0.08f, "Time constant of the gaze smoothing filter. Higher = steadier but laggier.");
             GazeHoldAfterBlink = Config.Bind("Gaze", "Hold After Blink Seconds", 0.2f, "Keep the last gaze direction this long after the eyes reopen.");
+            GazeRewindSeconds = Config.Bind("Gaze", "Rewind On Blink Seconds", 0.25f,
+                "When a blink starts, aim where you were looking this long before (eyes drift while the lids close). 0 = off.");
             GazeInvertX = Config.Bind("Gaze", "Invert X", false, "Flip horizontal gaze.");
             GazeInvertY = Config.Bind("Gaze", "Invert Y", false, "Flip vertical gaze.");
             GazeOffsetYaw = Config.Bind("Gaze", "Offset Yaw", 0f, "Degrees added to horizontal gaze (+ right) to correct a constant aim error.");
@@ -115,17 +137,46 @@ namespace BYEFrameBlink
                 "Use the menus with your eyes: look at a button (head + gaze) and do a deliberate blink to press it.");
             MenuBlinkSeconds = Config.Bind("VR", "Menu Blink Seconds", 0.3f,
                 "How long the eyes must stay closed for a blink to press a menu button (natural blinks are ~0.1-0.15 s).");
+            MenuSnapDegrees = Config.Bind("VR", "Menu Snap Degrees", 8f,
+                "In menus, the button nearest to where you look is selected if it's within this many degrees, so you don't have to hit it exactly.");
+            MenuPanelScale = Config.Bind("VR", "Menu Panel Scale", 1.5f,
+                "How much bigger the menu panel is drawn while a menu is open (spreads the options apart). 1 = UUVR's normal size.");
             FullViewVeil = Config.Bind("VR", "Full View Veil", true,
                 "Show the game's eyelids and black fades across your whole view instead of only on the floating UI panel.");
             VeilHalfFovDegrees = Config.Bind("VR", "Veil Half FOV Degrees", 50f,
                 "Half the vertical field of view the eyelids are stretched to. Lower = lids reach the center sooner.");
+            ShowReticle = Config.Bind("VR", "Show Reticle", true,
+                "Show the aiming dot during gameplay. Toggle in game with 'Reticle Toggle Key'. The menu cursor is always shown.");
+            ReticleToggleKey = Config.Bind("VR", "Reticle Toggle Key", KeyCode.F10, "Show/hide the gameplay aiming dot.");
+            ReticleAtTargetDepth = Config.Bind("VR", "Reticle At Target Depth", true,
+                "Draw the aiming dot at the distance of what you're looking at (same apparent size), so it doesn't double when you focus on something close.");
+            EyeSeparationScale = Config.Bind("VR", "Eye Separation Scale", 0.6f,
+                "Scales the distance between the two eyes' views. Below 1 the world looks bigger and close objects farther away, so they're easier to focus. 1 = real scale.");
+            EyeSeparationKey = Config.Bind("VR", "Eye Separation Key", KeyCode.F11, "Cycle 'Eye Separation Scale' through 1, 0.8, 0.6, 0.4 in game.");
+            DisableDepthOfField = Config.Bind("VR", "Disable Depth Of Field", true,
+                "Turn off the game's depth-of-field blur. Your eyes do their own focusing in VR, so the blur just looks smeared.");
+            DisableVolumetricLights = Config.Bind("VR", "Disable Volumetric Lights", true,
+                "Turn off the game's light shafts / haze effect. It is drawn for the flat camera, so in the headset it sticks to your view as you turn your head.");
+            DisableScreenSpaceReflections = Config.Bind("VR", "Disable Screen Space Reflections", true,
+                "Turn off the game's screen-space reflections (e.g. on water). They are traced for the flat camera, so in the headset they move with your head.");
+            VrWaterReflections = Config.Bind("VR", "VR Water Reflections", true,
+                "Render the water's reflection separately for each eye with the headset's view, so it stays on the water. Off = the game's flat-screen version (slides with your head).");
+            WaterReflectionResolution = Config.Bind("VR", "Water Reflection Resolution", 1024, "Size (pixels) of the water reflection image with VR Water Reflections. Higher = sharper, slower.");
+            DisableWaterReflections = Config.Bind("VR", "Disable Water Reflections", false,
+                "Turn the water's reflection/refraction off entirely (plain colours instead), e.g. if VR Water Reflections is too slow.");
+            DisableWaterEdgeBlend = Config.Bind("VR", "Disable Water Edge Blend", false,
+                "Turn off the water's soft edges/foam where it meets objects. Drawn for the flat camera, so in the headset it can move with your head.");
+            DisableWaterLightAbsorption = Config.Bind("VR", "Disable Water Light Absorption", false,
+                "Turn off the water's depth-based light absorption (most of its brightness). Drawn for the flat camera, so in the headset it can move with your head.");
+            SquintWhenBlinkReady = Config.Bind("VR", "Squint When Blink Ready", false,
+                "The game raises the eyelids a little (a grey band at the edge of your view) while a scene-ending blink is ready. The metronome icon shows the same thing.");
 
             TestMode = Config.Bind("Debug", "Test Mode", false,
                 "Ignore OSC from other machines (the headset); only localhost test input is used. Set by tools/run_tests.ps1 while it runs.");
             TraceCsv = Config.Bind("Debug", "Trace Csv", false, "Write a per-frame CSV trace to BepInEx/BYEFrameBlink_trace.csv.");
             OverlayKey = Config.Bind("Debug", "Overlay Key", KeyCode.F8, "Toggle the debug overlay.");
             ForceBlinkKey = Config.Bind("Debug", "Force Blink Key", KeyCode.F9, "Hold to simulate closed eyes.");
-            RecenterKey = Config.Bind("Debug", "Recenter Key", KeyCode.F6, "Recenter positional tracking.");
+            RecenterKey = Config.Bind("Debug", "Recenter Key", KeyCode.F6, "Make the direction you face straight ahead (and reset head position). Shift + this key toggles Recenter On Scene Start.");
 
             OscReceiver.Start(OscPort.Value);
 
@@ -133,7 +184,9 @@ namespace BYEFrameBlink
             harmony.PatchAll(typeof(Plugin).Assembly);
             InputRedirect.PatchGameInputCalls(harmony);
             HeadTracking.TryPatchUuvr(harmony);
+            StereoComfort.TryPatchUuvr(harmony);
             SimHead.Patch(harmony);
+            HeadTracking.PatchRecenter(harmony);
             IntroSkip.Init();
 
             Log.LogInfo("BYE Frame Blink loaded.");
@@ -142,10 +195,23 @@ namespace BYEFrameBlink
         private void Update()
         {
             if (Input.GetKeyDown(OverlayKey.Value)) OverlayVisible = !OverlayVisible;
-            if (Input.GetKeyDown(RecenterKey.Value) || OscReceiver.ConsumeRecenterRequest()) HeadTracking.Recenter();
+            bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            if (Input.GetKeyDown(RecenterKey.Value) && shift)
+            {
+                RecenterOnSceneStart.Value = !RecenterOnSceneStart.Value;
+                Toast.Show(RecenterOnSceneStart.Value ? "Recenter on scene start: on" : "Recenter on scene start: off");
+            }
+            else if (Input.GetKeyDown(RecenterKey.Value) || OscReceiver.ConsumeRecenterRequest()) HeadTracking.Recenter();
+            if (Input.GetKeyDown(ReticleToggleKey.Value))
+            {
+                ShowReticle.Value = !ShowReticle.Value;
+                Toast.Show(ShowReticle.Value ? "Aiming dot on" : "Aiming dot off");
+            }
+            if (Input.GetKeyDown(EyeSeparationKey.Value)) StereoComfort.CycleEyeSeparation();
 
             DebugCommands.Update();
             SimHead.Update();
+            HeadTracking.EnsureSceneHook();
             AutoPlay.Update();
             BlinkModeEnforcer.Update();
             DebugTrace.Update();
@@ -153,9 +219,11 @@ namespace BYEFrameBlink
 
         private void LateUpdate()
         {
+            StereoComfort.LateUpdate();
             ReticleFollower.LateUpdate();
             Veil.LateUpdate();
             MenuGaze.LateUpdate();
+            Toast.LateUpdate();
             UiOverlay.EnforceLayerMasks();
         }
 
