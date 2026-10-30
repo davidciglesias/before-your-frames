@@ -81,7 +81,8 @@ namespace BYEFrameBlink
                 float held = now - _closedAt;
                 _closedAt = -1f;
                 GameObject clicked = _pressTarget != null ? _pressTarget : _hover;
-                if (held >= Plugin.MenuBlinkSeconds.Value && clicked != null && clicked.activeInHierarchy)
+                // A press of the controller's Blink Button is always deliberate, however short.
+                if ((held >= Plugin.MenuBlinkSeconds.Value || BlinkState.ClosedByButton) && clicked != null && clicked.activeInHierarchy)
                 {
                     Clicks++;
                     Plugin.Log.LogInfo($"Menu blink-click on {clicked.name} (held {held:F2} s).");

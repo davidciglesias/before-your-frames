@@ -81,6 +81,28 @@ Allow **UDP 9000 inbound** in the Windows firewall (private network) for the gam
 | F10 | Show/hide the aiming dot during gameplay (menus always show their cursor) |
 | F11 | Cycle the world size: real, a bit bigger, bigger (default), much bigger (see Comfort below) |
 
+### VR controller shortcuts
+
+They work the same on either controller, so you can play holding just one:
+
+| Button | Action |
+|---|---|
+| Upper face button (Y / D-pad up on Steam Frame) | Open/close the pause menu (or back out of VR settings) |
+| Lower face button | Hold = eyes closed (blink without eye tracking; a press clicks a menu option) |
+| Thumbstick/trackpad click | Recenter view (same as F6) |
+| Grip | Cycle the world size (same as F11) |
+| Trigger | Show/hide the aiming dot (same as F10) |
+
+These are read through SteamVR's "legacy" controller buttons, the compatibility layer it keeps for exactly this kind of pre-2019, point-and-click game, so they need no per-headset setup. SteamVR exposes only two face-button slots there: `Menu Button` and `Blink Button` in the `[Controller]` section pick which one does what (`Menu` / `A`), if your controller maps them the other way round. The dedicated Menu/Start button next to the Steam button never reaches games, so it can't be used.
+
+### VR settings menu
+
+The main menu and the pause menu have a **vr settings** entry under settings: eye tracking, world size, aiming dot, recentering, head movement, render quality and vignette, all changeable with gaze + blink (or the controller). Changes are saved to the config file right away.
+
+### Playing without eye tracking
+
+Headsets without eye tracking work too: with no eye data the aim follows your head (the dot sits at the center of your view and is always shown), and the lower face button acts as your eyes, held down for as long as the game wants them closed. To force this even when eye data arrives, set `Eye Tracking = Off` (or choose it in vr settings).
+
 ## Settings
 
 All settings are in `BepInEx\config\byeframeblink.cfg`; the defaults should work.
@@ -102,7 +124,9 @@ The game was framed for a flat screen, and many scenes put objects a few centime
 
 - **World size** (F11 in game: real, a bit bigger, bigger, much bigger). Making the world look bigger pushes close objects farther away, so they are easier to focus on. Default: bigger. In the config file this is `Eye Separation Scale` (1, 0.8, 0.6, 0.4; 1 is real size).
 - `Disable Depth Of Field` (default on) removes the game's focus blur; in VR your eyes do the focusing.
-- Some of the game's effects are drawn for the flat camera and in a headset stick to your view as you turn your head. These are off by default: `Disable Volumetric Lights` (light shafts and haze), `Disable Screen Space Reflections`, and `Disable Water Reflections` (the water then reflects a plain sky colour). The water keeps its soft edges and light absorption (`Disable Water Edge Blend` and `Disable Water Light Absorption` default to off; turn them on if those move with your view in some scene).
+- Some of the game's effects are drawn for the flat camera and in a headset stick to your view as you turn your head. These are off by default: `Disable Volumetric Lights` (light shafts and haze) and `Disable Screen Space Reflections`. The water's reflections are re-rendered for each eye instead (`VR Water Reflections`, sharpness `Water Reflection Resolution`); `Disable Water Reflections` turns them off entirely if that's too slow.
+- **Sharpness.** SteamVR picks the render resolution, and over a headset's wide field of view it is much coarser than a monitor, which shows most on the main menu's wide scenery. `Menu Render Scale` (default 1.5) renders the main menu sharper; it's cheap to draw there. `Render Scale` (default 1, also "render quality" in vr settings) does the same in game, at a GPU cost. Raising the game's resolution in SteamVR's per-app video settings works too. `Smooth UI` (default on) keeps menu text crisp instead of jagged.
+- `Vignette` (default `Stretched`): the edge darkening the game uses for mood at some moments is drawn across your whole view instead of on the flat image. `Off` removes it, `Original` keeps the flat-screen version.
 - `Squint When Blink Ready` (default off): in the flat game the eyelids rise a little when a scene-ending blink is ready, which in VR shows up as a grey band at the edge of your view. The metronome icon still tells you.
 
 ## Troubleshooting

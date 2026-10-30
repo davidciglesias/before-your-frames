@@ -19,6 +19,9 @@ Test driver for BYEFrameBlink: sends fake eyelid / head-pose OSC to the plugin (
   bye_sim.ps1 inspect <Type|GameObject>   log hierarchy/canvas/placement
   bye_sim.ps1 cfg "guid|Section|Key|value" set any plugin's config live
   bye_sim.ps1 gaze x y           fake gaze (1 = 45 deg, +x right, +y up)
+  bye_sim.ps1 controllers [secs] log VR controller button changes for a while (default 20s)
+  bye_sim.ps1 vignette <0..1|restore>  force the current vignette on (for testing), or undo
+  bye_sim.ps1 padblink [ms]      hold the controller Blink Button for ms (default 150)
 #>
 param([Parameter(Position = 0)][string]$Cmd, [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Rest = @())
 $Values = [double[]]@($Rest | Where-Object { $null -ne ($_ -as [double]) } | ForEach-Object { [double]$_ })
@@ -101,6 +104,11 @@ switch ($Cmd) {
     'gaze'     { Send '/bye/gaze' @($Values[0], $Values[1]) }
     'click'    { SendString '/bye/click' ($Rest -join ' ') }
     'invoke'   { SendString '/bye/invoke' ($Rest -join ' ') }
+    'controllers' { SendString '/bye/controllers' ($Rest -join ' ') }
+    'vignette' { SendString '/bye/vignette' ($Rest -join ' ') }
+    'cameras'  { SendString '/bye/cameras' '' }
+    'pp'       { SendString '/bye/pp' ($Rest -join ' ') }
+    'padblink' { $ms = if ($Values.Count) { $Values[0] } else { 150 }; SendString '/bye/padblink' '1'; [Threading.Thread]::Sleep([int]$ms); SendString '/bye/padblink' '0' }
     default    { Get-Help $MyInvocation.MyCommand.Path -Full | Out-String | Write-Output }
 }
 $udp.Close()

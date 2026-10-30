@@ -93,6 +93,45 @@ namespace BYEFrameBlink
             Add("veilBehindPanel", Veil.AllBehindPanel);
             Add("volumetricOn", Camera.main != null && Camera.main.GetComponent<VolumetricLightRenderer>() is VolumetricLightRenderer vlr && vlr.enabled);
             Add("ssrOn", Camera.main != null && Camera.main.GetComponent<UnityEngine.PostProcessing.PostProcessingBehaviour>() is UnityEngine.PostProcessing.PostProcessingBehaviour ppb && ppb.profile != null && ppb.profile.screenSpaceReflection.enabled);
+            UnityEngine.PostProcessing.VignetteModel vig = VignetteVR.CurrentModel();
+            Add("vignetteModelOn", vig != null && vig.enabled && vig.settings.intensity > 0.001f);
+            if (Camera.main != null && Camera.main.GetComponent<UnityEngine.PostProcessing.PostProcessingBehaviour>() is UnityEngine.PostProcessing.PostProcessingBehaviour ppAll && ppAll.profile != null)
+            {
+                var pf = ppAll.profile;
+                var on = new System.Collections.Generic.List<string>();
+                if (pf.antialiasing.enabled) on.Add("antialiasing:" + pf.antialiasing.settings.method);
+                if (pf.ambientOcclusion.enabled) on.Add("ao");
+                if (pf.screenSpaceReflection.enabled) on.Add("ssr");
+                if (pf.depthOfField.enabled) on.Add("dof");
+                if (pf.motionBlur.enabled) on.Add("motionBlur");
+                if (pf.eyeAdaptation.enabled) on.Add("eyeAdaptation");
+                if (pf.bloom.enabled) on.Add("bloom");
+                if (pf.colorGrading.enabled) on.Add("colorGrading");
+                if (pf.userLut.enabled) on.Add("userLut");
+                if (pf.chromaticAberration.enabled) on.Add("chromaticAberration:" + pf.chromaticAberration.settings.intensity.ToString("F2"));
+                if (pf.grain.enabled) on.Add("grain:" + pf.grain.settings.intensity.ToString("F2") + "/" + pf.grain.settings.size.ToString("F2"));
+                if (pf.vignette.enabled) on.Add("vignette");
+                if (pf.dithering.enabled) on.Add("dithering");
+                if (pf.fog.enabled) on.Add("fog");
+                Add("ppProfile", pf.name + ": " + string.Join(",", on.ToArray()));
+            }
+            Add("vignetteFlatActive", VignetteVR.FlatActive());
+            Add("vignetteOverlay", VignetteVR.OverlayShown);
+            Add("eyeSeparation", Plugin.EyeSeparationScale.Value);
+            Add("webcamFeedShown", WebcamBlock.FeedShown);
+            Add("screen", $"{Screen.width}x{Screen.height} fullscreen={Screen.fullScreen}");
+            GameObject uiQuad = GameObject.Find("VrUiQuad");
+            Texture uiTex = uiQuad != null && uiQuad.GetComponent<Renderer>() != null ? uiQuad.GetComponent<Renderer>().sharedMaterial.mainTexture : null;
+            Add("uiTexture", uiTex != null ? $"{uiTex.width}x{uiTex.height} mips={(uiTex is RenderTexture rtx && rtx.useMipMap)} filter={uiTex.filterMode}" : "");
+            Add("eyeTexture", $"{UnityEngine.XR.XRSettings.eyeTextureWidth}x{UnityEngine.XR.XRSettings.eyeTextureHeight} scale={UnityEngine.XR.XRSettings.eyeTextureResolutionScale:F2} viewport={UnityEngine.XR.XRSettings.renderViewportScale:F2}");
+            Add("quality", $"{QualitySettings.names[QualitySettings.GetQualityLevel()]} aa={QualitySettings.antiAliasing} mainTarget={(Camera.main != null && Camera.main.targetTexture != null ? Camera.main.targetTexture.width + "x" + Camera.main.targetTexture.height : "-")} " +
+                                $"dynRes={(Camera.main != null && Camera.main.allowDynamicResolution)} scaler={ScalableBufferManager.widthScaleFactor:F2}");
+            Add("render", $"shadowRes={QualitySettings.shadowResolution} dist={QualitySettings.shadowDistance:F0} cascades={QualitySettings.shadowCascades} proj={QualitySettings.shadowProjection} " +
+                          (Camera.main != null ? $"path={Camera.main.actualRenderingPath} msaa={Camera.main.allowMSAA} hdr={Camera.main.allowHDR} far={Camera.main.farClipPlane:F0}" : ""));
+            Add("uiQuadScale", uiQuad != null ? uiQuad.transform.lossyScale.ToString("F2") : "");
+            Add("vrMenuEntries", VrSettingsMenu.Entries);
+            Add("vrMenuOpen", VrSettingsMenu.IsOpen);
+            Add("vrMenuRows", VrSettingsMenu.OpenRows);
             Add("waterMaterialsChanged", StereoComfort.WaterMaterialsChanged);
             Add("waterEyeRenders", WaterReflectionVR.EyeRenders);
             Add("stereoMode", UnityEngine.XR.XRSettings.stereoRenderingMode.ToString());

@@ -32,7 +32,7 @@ namespace BYEFrameBlink
             if (frame == _lastFrame) return;
             _lastFrame = frame;
 
-            bool enabled = Plugin.GazeAiming.Value;
+            bool enabled = Plugin.GazeAiming.Value && Plugin.EyeTracking.Value != EyeTrackingMode.Off;
             bool fresh = OscReceiver.SecondsSinceGazeData < Plugin.DataTimeoutSeconds.Value;
             if (!enabled || !fresh)
             {

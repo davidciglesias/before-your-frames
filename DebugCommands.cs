@@ -15,6 +15,7 @@ namespace BYEFrameBlink
     /// from a script while it's rendering to the headset (the desktop window doesn't update in VR).
     ///   /bye/shot [name]                 save the left-eye image to BepInEx/BYEFrameBlink_shots/
     ///   /bye/buttons                     log active UI buttons and their labels
+    ///   /bye/controllers [secs]          log VR controller button changes for a while (default 20s)
     ///   /bye/click "label"               invoke the onClick of the active button whose label matches
     ///   /bye/invoke "Type.Method"        call a parameterless method on the first object of that type (or a static)
     ///   /bye/scenes                      log loaded scenes
@@ -30,6 +31,7 @@ namespace BYEFrameBlink
 
         public static void Update()
         {
+            WatchControllersUpdate();
             while (true)
             {
                 KeyValuePair<string, string> cmd;
@@ -43,6 +45,29 @@ namespace BYEFrameBlink
             }
         }
 
+        private static float _watchControllersUntil;
+        private static ulong _watchPrevLeft, _watchPrevRight, _watchPrevLeftTouched, _watchPrevRightTouched;
+
+        /// <summary>/bye/controllers [seconds] logs every raw button bit that changes on either hand for that long
+        /// (default 20s), so a real controller's physical buttons can be matched to EVRButtonId values by pressing
+        /// them one at a time and reading the log.</summary>
+        private static void WatchControllers(string arg)
+        {
+            float seconds = 20f;
+            if (float.TryParse(arg, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float parsed) && parsed > 0)
+                seconds = parsed;
+            _watchControllersUntil = Time.unscaledTime + seconds;
+            _watchPrevLeft = _watchPrevRight = _watchPrevLeftTouched = _watchPrevRightTouched = 0;
+            Plugin.Log.LogInfo($"[cmd] watching controller buttons for {seconds:F0}s (press buttons now)");
+        }
+
+        private static void WatchControllersUpdate()
+        {
+            if (Time.unscaledTime >= _watchControllersUntil) return;
+            ControllerShortcuts.DumpChanges("Left", ref _watchPrevLeft, ref _watchPrevLeftTouched);
+            ControllerShortcuts.DumpChanges("Right", ref _watchPrevRight, ref _watchPrevRightTouched);
+        }
+
         private static void Run(string address, string arg)
         {
             switch (address)
@@ -51,6 +76,37 @@ namespace BYEFrameBlink
                 case "/bye/overlayshot": OverlayShot(arg); break;
                 case "/bye/followers": Followers(arg); break;
                 case "/bye/buttons": ListButtons(); break;
+                case "/bye/controllers": WatchControllers(arg); break;
+                case "/bye/vignette": VignetteVR.Force(arg); break;
+                case "/bye/padblink": ControllerShortcuts.SimulatedBlinkHeld = arg == "1"; break;
+                case "/bye/pp":
+                {
+                    // "/bye/pp ambientOcclusion off": toggle one post-processing model on the current profile.
+                    string[] pa = (arg ?? "").Split(' ');
+                    var ppb = Camera.main != null ? Camera.main.GetComponent<UnityEngine.PostProcessing.PostProcessingBehaviour>() : null;
+                    var field = ppb != null && ppb.profile != null && pa.Length == 2 ? ppb.profile.GetType().GetField(pa[0]) : null;
+                    if (field != null && field.GetValue(ppb.profile) is UnityEngine.PostProcessing.PostProcessingModel model)
+                    {
+                        model.enabled = pa[1] == "on";
+                        Plugin.Log.LogInfo($"[cmd] pp {pa[0]} = {model.enabled}");
+                    }
+                    else Plugin.Log.LogWarning($"[cmd] pp: can't set '{arg}'");
+                    break;
+                }
+                case "/bye/cameras":
+                    foreach (Camera c in Resources.FindObjectsOfTypeAll<Camera>())
+                    {
+                        if (c.gameObject.scene.name == null) continue;
+                        string path = c.name;
+                        for (Transform p = c.transform.parent; p != null; p = p.parent) path = p.name + "/" + path;
+                        RenderTexture rt = c.targetTexture;
+                        Plugin.Log.LogInfo($"[cmd] camera {path} active={c.isActiveAndEnabled} depth={c.depth} tag={c.tag} stereo={c.stereoEnabled}/{c.stereoTargetEye} " +
+                                           $"target={(rt != null ? $"{rt.name} {rt.width}x{rt.height} aa={rt.antiAliasing} filter={rt.filterMode}" : "screen")} rect={c.rect} fov={c.fieldOfView:F0} " +
+                                           $"mask={c.cullingMask} comps={string.Join(",", c.GetComponents<Behaviour>().Select(b => b.GetType().Name + (b.enabled ? "" : "(off)")).ToArray())}");
+                    }
+                    foreach (RawImage ri in UnityEngine.Object.FindObjectsOfType<RawImage>())
+                        Plugin.Log.LogInfo($"[cmd] rawimage {ri.name} tex={(ri.texture != null ? $"{ri.texture.name} {ri.texture.width}x{ri.texture.height}" : "-")} canvas={(ri.canvas != null ? ri.canvas.rootCanvas.name : "-")}");
+                    break;
                 case "/bye/menucands": MenuGaze.DumpCandidates(); break;
                 case "/bye/click": Click(arg); break;
                 case "/bye/invoke": Invoke(arg); break;
@@ -266,6 +322,33 @@ namespace BYEFrameBlink
                 FollowerSnap.Clear();
                 foreach (Transform t in transforms) FollowerSnap[t] = new Pose(t.position, t.rotation);
                 Plugin.Log.LogInfo($"[cmd] followers snap: {FollowerSnap.Count} lights/particles");
+                return;
+            }
+            if (mode != null && mode.StartsWith("near"))
+            {
+                // Any renderer close to the camera, or literally parented under it: a prop that only pokes into
+                // view because VR's wider FOV shows more than the flat camera's frustum ever did.
+                float.TryParse(mode.Substring(4).Trim(), out float radius);
+                if (radius <= 0) radius = 3f;
+                Camera main = Camera.main;
+                if (main == null) { Plugin.Log.LogWarning("[cmd] followers near: no Camera.main"); return; }
+                Vector3 camPos = main.transform.position;
+                foreach (Renderer r in UnityEngine.Object.FindObjectsOfType<Renderer>())
+                {
+                    if (r is ParticleSystemRenderer) continue;
+                    bool underCamera = false;
+                    for (Transform p = r.transform.parent; p != null; p = p.parent)
+                        if (p == main.transform || p == main.transform.parent) { underCamera = true; break; }
+                    float dist = Vector3.Distance(r.transform.position, camPos);
+                    if (!underCamera && dist > radius) continue;
+                    Color? color = null;
+                    if (r.sharedMaterial != null && r.sharedMaterial.HasProperty("_Color")) color = r.sharedMaterial.GetColor("_Color");
+                    string path = r.name;
+                    for (Transform p = r.transform.parent; p != null; p = p.parent) path = p.name + "/" + path;
+                    Plugin.Log.LogInfo($"[cmd] near {path} enabled={r.enabled} dist={dist:F2} underCamera={underCamera} " +
+                                        $"local={r.transform.localPosition:F2} color={(color.HasValue ? color.Value.ToString() : "-")} " +
+                                        $"shader={(r.sharedMaterial != null ? r.sharedMaterial.shader.name : "-")}");
+                }
                 return;
             }
             foreach (var kv in FollowerSnap)

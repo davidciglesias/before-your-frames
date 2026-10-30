@@ -71,6 +71,17 @@ namespace BYEFrameBlink
             }
         }
 
+        /// <summary>With no webcam running, the game's on-screen webcam preview is an empty blue box in the corner.</summary>
+        public static void HideEmptyFeed()
+        {
+            if (!Plugin.BlockWebcam.Value) return;
+            PauseMenuController pmc = PauseMenuController.instance;
+            if (pmc != null && pmc.webcamFeed != null && pmc.webcamFeed.activeSelf) pmc.webcamFeed.SetActive(false);
+        }
+
+        public static bool FeedShown =>
+            PauseMenuController.instance != null && PauseMenuController.instance.webcamFeed != null && PauseMenuController.instance.webcamFeed.activeInHierarchy;
+
         public static int PlayingWebcamTextures()
         {
             int n = 0;

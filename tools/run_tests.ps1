@@ -104,6 +104,8 @@ try {
         # Blink menus: aim the (simulated) head at the button, then blink.
         Cfg 'Debug' 'Test Mode' 'true'
         Cfg 'Head Tracking' 'Simulate Head' 'true'
+        Cfg 'VR' 'Render Scale' '1'
+        Cfg 'VR' 'Menu Render Scale' '1.5'
         # Chapter select -> "Are you sure?" -> no, all by gaze + deliberate blink (answers no: the save is untouched).
         function MenuPress([string]$target, [string]$tag) {
             & $Sim menuaim $target; [Threading.Thread]::Sleep(700)
@@ -116,6 +118,8 @@ try {
         & $Sim menuaim 'Quit Button|3'; [Threading.Thread]::Sleep(700)
         $sn = Status 'snap-near'
         Check 'menu panel enlarged while in a menu' (Near $sn.menuPanelWidth 2.7 0.05) "width=$($sn.menuPanelWidth)"
+        Check 'UI panel texture mipmapped (crisp text)' ($sn.uiTexture -match 'mips=True' -and $sn.uiTexture -match 'Trilinear') "uiTexture=$($sn.uiTexture)"
+        Check 'main menu rendered at Menu Render Scale' ($sn.eyeTexture -match 'scale=1\.50') "eyeTexture=$($sn.eyeTexture)"
         Check 'menu: 3 deg below a button still selects it' ($sn.menuHover -eq 'Quit Button') "hover=$($sn.menuHover) deg=$($sn.menuHoverDegrees)"
         & $Sim menuaim 'Quit Button|14'; [Threading.Thread]::Sleep(700)
         $sf = Status 'snap-far'
@@ -155,6 +159,25 @@ try {
         Check 'gaze+blink Back leaves Settings' ($r[1].menuClicks -eq $r[0].menuClicks + 1) "hover=$($r[0].menuHover)"
         [Threading.Thread]::Sleep(800)
 
+        # VR settings: an entry under Settings, our options in the same column, rows change settings, back restores the menu.
+        $v0 = Status 'vr-entry'
+        Check 'vr settings entry in the main menu' ($v0.vrMenuEntries -ge 1) "entries=$($v0.vrMenuEntries)"
+        $r = MenuPress 'VR Settings Button' 'vr-open'
+        Check 'gaze+blink opens VR settings' ([bool]$r[1].vrMenuOpen -and ($r[1].vrMenuRows -eq 9)) "open=$($r[1].vrMenuOpen) rows=$($r[1].vrMenuRows)"
+        $sep0 = $r[1].eyeSeparation
+        $r = MenuPress 'VR World Size Button' 'vr-size'
+        Check 'VR settings: world size row cycles it' (-not (Near $r[1].eyeSeparation $sep0 0.01)) "$sep0 -> $($r[1].eyeSeparation)"
+        & $Sim menuaim 'VR Aiming Dot Button'; [Threading.Thread]::Sleep(700)
+        $pb0 = Status 'vr-pad-aim'
+        & $Sim padblink 100; [Threading.Thread]::Sleep(800)
+        $pb1 = Status 'vr-pad-press'
+        Check 'controller blink button: a short press clicks a menu option' ($pb1.menuClicks -eq $pb0.menuClicks + 1) "hover=$($pb0.menuHover) clicks=$($pb0.menuClicks)->$($pb1.menuClicks)"
+        $r = MenuPress 'VR Back Button' 'vr-back'
+        Check 'VR settings back restores the main menu' (-not $r[1].vrMenuOpen) "open=$($r[1].vrMenuOpen)"
+        & $Sim menuaim 'Quit Button'; [Threading.Thread]::Sleep(700)
+        $vq = Status 'vr-after'
+        Check 'main menu buttons back after VR settings' ($vq.menuHover -eq 'Quit Button') "hover=$($vq.menuHover)"
+
         $label = if ($canContinue) { 'continue' } else { 'new game' }
         & $Sim menuaim $label; [Threading.Thread]::Sleep(600)
         $mm = Status 'menu-aim'
@@ -172,6 +195,10 @@ try {
     $inGame = Wait-Until { $x = Status 'load'; $x.blinkCounterPresent -and ($x.scenes -match '_CodaMain') } 120 3000
     Check 'reaches gameplay (_CodaMain + BlinkCounter)' $inGame
     if (-not $inGame) { throw 'could not reach gameplay' }
+    if ($sn) {
+        $rs = Status 'render-scale-game'
+        Check 'gameplay back at Render Scale (1)' ($rs.eyeTexture -match 'scale=1\.00') "eyeTexture=$($rs.eyeTexture)"
+    }
     [Threading.Thread]::Sleep(5000)
 
     $s = Status 'game'
@@ -298,6 +325,51 @@ try {
     Check 'unsquint -> veil clears again' ((($vo.veilUpperAlpha -lt 0.01) -or ($vo.veilUpperEdge -ge 0.45)) -and (($vo.veilLowerAlpha -lt 0.01) -or ($vo.veilLowerEdge -le -0.45))) "upper=$($vo.veilUpperEdge) lower=$($vo.veilLowerEdge)"
     Cfg 'VR' 'Squint When Blink Ready' 'false'
 
+    # ---------------------------------------------------------------- vignette, webcam box
+    & $Sim vignette 0.6; [Threading.Thread]::Sleep(600)
+    $vg = Status 'vignette'
+    Check 'vignette drawn across the whole view, not on the flat image' ([bool]$vg.vignetteModelOn -and [bool]$vg.vignetteOverlay -and -not $vg.vignetteFlatActive) "model=$($vg.vignetteModelOn) overlay=$($vg.vignetteOverlay) flat=$($vg.vignetteFlatActive)"
+    Cfg 'VR' 'Vignette' 'Original'; [Threading.Thread]::Sleep(400)
+    $vf = Status 'vignette-original'
+    Check 'Vignette = Original keeps the flat effect' ([bool]$vf.vignetteFlatActive -and -not $vf.vignetteOverlay) "overlay=$($vf.vignetteOverlay) flat=$($vf.vignetteFlatActive)"
+    Cfg 'VR' 'Vignette' 'Off'; [Threading.Thread]::Sleep(400)
+    $vx = Status 'vignette-off'
+    Check 'Vignette = Off draws neither' (-not $vx.vignetteFlatActive -and -not $vx.vignetteOverlay) "overlay=$($vx.vignetteOverlay) flat=$($vx.vignetteFlatActive)"
+    Cfg 'VR' 'Vignette' 'Stretched'
+    & $Sim vignette restore
+    Check 'empty webcam preview hidden' (-not $vx.webcamFeedShown) "shown=$($vx.webcamFeedShown)"
+
+    # ---------------------------------------------------------------- no eye tracking: head aim + controller blink
+    Cfg 'VR' 'Show Reticle' 'false'
+    Cfg 'Gaze' 'Eye Tracking' 'Off'
+    Repeat-Send { & $Sim gaze 0.4 0; & $Sim lid 0.8 } 0.8
+    $hg = Status 'head-aim'
+    Check 'eye tracking off: aim follows the head, not the eyes' (-not $hg.gazeActive -and (Near $hg.aimAngleFromCenter 0 0.5)) "gazeActive=$($hg.gazeActive) angle=$($hg.aimAngleFromCenter)"
+    Check 'eye tracking off: aiming dot shown even when hidden' ([bool]$hg.reticleDrawing) "drawing=$($hg.reticleDrawing)"
+    Repeat-Send { & $Sim lid 0.05 } 0.5; Repeat-Send { & $Sim lid 0.8 } 0.4
+    $hl = Status 'head-lids'
+    Check 'eye tracking off: eyelid data ignored' ($hl.pluginBlinks -eq $hg.pluginBlinks) "plugin $($hg.pluginBlinks)->$($hl.pluginBlinks)"
+    & $Sim padblink 300; [Threading.Thread]::Sleep(400)
+    $hp = Status 'head-pad'
+    Check 'controller blink button closes the eyes' ($hp.pluginBlinks -eq $hl.pluginBlinks + 1) "plugin $($hl.pluginBlinks)->$($hp.pluginBlinks)"
+    Cfg 'Gaze' 'Eye Tracking' 'Auto'
+    Cfg 'VR' 'Show Reticle' 'true'
+
+    # ---------------------------------------------------------------- VR settings from the pause menu
+    & $Sim invoke PauseMenuController.Pause; [Threading.Thread]::Sleep(1500)
+    & $Sim click 'vr settings'; [Threading.Thread]::Sleep(1000)
+    $pv = Status 'pause-vr'
+    Check 'VR settings open from the pause menu' ([bool]$pv.vrMenuOpen -and ($pv.vrMenuRows -eq 9)) "open=$($pv.vrMenuOpen) rows=$($pv.vrMenuRows)"
+    & $Sim invoke PauseMenuController.Resume; [Threading.Thread]::Sleep(1000)
+    $pr = Status 'pause-resume'
+    Check 'resuming closes VR settings' (-not $pr.vrMenuOpen) "open=$($pr.vrMenuOpen)"
+    & $Sim invoke PauseMenuController.Pause; [Threading.Thread]::Sleep(1500)
+    $n0 = (Get-Content $Log).Count
+    & $Sim buttons; [Threading.Thread]::Sleep(1500)
+    $pauseButtons = (Get-Content $Log | Select-Object -Skip $n0) -join "`n"
+    Check 'pause menu whole again after VR settings' (($pauseButtons -match "\(Resume Button\)") -and ($pauseButtons -match "\(Quit Button\)") -and -not ($pauseButtons -match "\(VR World Size Button\)")) ''
+    & $Sim invoke PauseMenuController.Resume; [Threading.Thread]::Sleep(1000)
+
     # ---------------------------------------------------------------- positional tracking
     & $Sim head 0 0 0 0 0 0; & $Sim recenter; [Threading.Thread]::Sleep(300)
     Cfg 'Head Tracking' 'Positional Tracking' 'false'
@@ -321,7 +393,9 @@ finally {
     if (Test-Path $CfgBackup) {
         if (Get-Process 'Before Your Eyes' -ErrorAction SilentlyContinue) {
             $orig = Get-Content $CfgBackup
-            foreach ($pair in @(@('Head Tracking', 'Simulate Head'), @('Head Tracking', 'Positional Tracking'), @('Debug', 'Test Mode'), @('VR', 'Show Reticle'), @('VR', 'Squint When Blink Ready'))) {
+            foreach ($pair in @(@('Head Tracking', 'Simulate Head'), @('Head Tracking', 'Positional Tracking'), @('Debug', 'Test Mode'), @('VR', 'Show Reticle'), @('VR', 'Squint When Blink Ready'),
+                               @('VR', 'Eye Separation Scale'), @('VR', 'Vignette'), @('Gaze', 'Eye Tracking'),
+                               @('VR', 'Render Scale'), @('VR', 'Menu Render Scale'))) {
                 $line = $orig | Where-Object { $_ -match "^$([regex]::Escape($pair[1])) = " } | Select-Object -First 1
                 if ($line) { Cfg $pair[0] $pair[1] ($line -split ' = ', 2)[1] }
             }

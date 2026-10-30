@@ -89,6 +89,16 @@ namespace BYEFrameBlink
             parent.worldToCameraMatrix = m;
         }
 
+        public static string EyeSeparationLabel
+        {
+            get
+            {
+                for (int i = 0; i < Presets.Length; i++)
+                    if (Mathf.Abs(Presets[i] - Plugin.EyeSeparationScale.Value) < 0.01f) return PresetLabels[i];
+                return Plugin.EyeSeparationScale.Value.ToString("0.##");
+            }
+        }
+
         public static void CycleEyeSeparation()
         {
             float current = Plugin.EyeSeparationScale.Value;
@@ -112,8 +122,7 @@ namespace BYEFrameBlink
                 // Screen-space reflections (water) are traced with the flat camera's projection, so in the headset
                 // they slide around with your head instead of staying on the surface.
                 if (Plugin.DisableScreenSpaceReflections.Value && pp.profile.screenSpaceReflection.enabled)
-                    pp.profile.screenSpaceReflection.enabled = false;
-            }
+                    pp.profile.screenSpaceReflection.enabled = false;            }
 
             UpdateWater();
 

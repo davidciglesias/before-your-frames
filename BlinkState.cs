@@ -18,6 +18,9 @@ namespace BYEFrameBlink
 
         public static float Openness { get; private set; } = 1f;
         public static bool HasData { get; private set; }
+
+        /// <summary>The current (or last) closure came from the controller's Blink Button, not the eyes.</summary>
+        public static bool ClosedByButton { get; private set; }
         public static int BlinkCount { get; private set; }
 
         public static bool Closed { get { Sample(); return _closed; } }
@@ -34,7 +37,7 @@ namespace BYEFrameBlink
             _prevClosed = _closed;
 
             float now = Time.realtimeSinceStartup;
-            HasData = OscReceiver.SecondsSinceLidData < Plugin.DataTimeoutSeconds.Value;
+            HasData = Plugin.EyeTracking.Value != EyeTrackingMode.Off && OscReceiver.SecondsSinceLidData < Plugin.DataTimeoutSeconds.Value;
 
             if (HasData)
             {
@@ -49,7 +52,7 @@ namespace BYEFrameBlink
             }
             else
             {
-                if (!_warnedTimeout && OscReceiver.PacketCount > 0)
+                if (!_warnedTimeout && OscReceiver.PacketCount > 0 && Plugin.EyeTracking.Value != EyeTrackingMode.Off)
                 {
                     Plugin.Log.LogWarning("Eyelid data timed out; treating eyes as open.");
                     _warnedTimeout = true;
@@ -71,9 +74,15 @@ namespace BYEFrameBlink
             else if (!_rawClosed && _filtered && held >= Plugin.MinOpenSeconds.Value) _filtered = false;
 
             // Debug key bypasses the filters entirely.
-            _closed = _filtered || Input.GetKey(Plugin.ForceBlinkKey.Value) || AutoPlay.ForceClosed;
+            bool button = ControllerShortcuts.BlinkHeld;
+            _closed = _filtered || button || Input.GetKey(Plugin.ForceBlinkKey.Value) || AutoPlay.ForceClosed;
 
-            if (_closed && !_prevClosed) BlinkCount++;
+            if (_closed && !_prevClosed)
+            {
+                BlinkCount++;
+                ClosedByButton = false;
+            }
+            if (_closed && button) ClosedByButton = true;
         }
     }
 }

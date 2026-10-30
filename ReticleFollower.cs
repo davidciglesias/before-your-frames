@@ -44,7 +44,8 @@ namespace BYEFrameBlink
             if (_copy == null) _copy = UiOverlay.CreateSprite("BYE Reticle", 30001);
 
             Canvas canvas = _source.canvas != null ? _source.canvas.rootCanvas : null;
-            bool visible = Plugin.ShowReticle.Value && _source.isActiveAndEnabled && _source.sprite != null && canvas != null;
+            // Aiming with the head (no eye data), the dot is the only way to see what you aim at: always show it.
+            bool visible = (Plugin.ShowReticle.Value || !Gaze.Active) && _source.isActiveAndEnabled && _source.sprite != null && canvas != null;
             _copy.enabled = visible;
             Drawing = visible;
             if (visible)
