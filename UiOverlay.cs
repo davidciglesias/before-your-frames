@@ -13,6 +13,46 @@ namespace BYEFrameBlink
         private static float _nextSearch;
         private static Sprite _white;
 
+        private static float _headsetHalfFov = -1f;
+
+        /// <summary>
+        /// Half the vertical field of view that full-view layers (eyelids, fades, vignette) are mapped to: Veil Half FOV
+        /// Degrees, or the headset's own reach if that's bigger. A Steam Frame sees 60 degrees above center (49 below),
+        /// so with the 50 degree default the open upper eyelid showed as a black band across the top of the view.
+        /// </summary>
+        public static float VeilHalfFovDegrees
+        {
+            get
+            {
+                if (_headsetHalfFov < 0f) _headsetHalfFov = MeasureHeadsetHalfFov();
+                return Mathf.Max(Plugin.VeilHalfFovDegrees.Value, _headsetHalfFov);
+            }
+        }
+
+        private static float MeasureHeadsetHalfFov()
+        {
+            try
+            {
+                Valve.VR.CVRSystem vr = Valve.VR.OpenVR.System;
+                if (vr == null) return 0f;
+                float most = 0f;
+                foreach (Valve.VR.EVREye eye in new[] { Valve.VR.EVREye.Eye_Left, Valve.VR.EVREye.Eye_Right })
+                {
+                    float l = 0, r = 0, t = 0, b = 0;
+                    vr.GetProjectionRaw(eye, ref l, ref r, ref t, ref b);
+                    most = Mathf.Max(most, Mathf.Abs(t), Mathf.Abs(b));
+                }
+                float deg = most > 0f ? Mathf.Atan(most) * Mathf.Rad2Deg + 2f : 0f; // a little margin past the edge
+                Plugin.Log.LogInfo($"Headset reaches {deg - 2f:F1} degrees vertically; full-view layers use {Mathf.Max(Plugin.VeilHalfFovDegrees.Value, deg):F1}.");
+                return deg;
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogWarning("Could not read the headset field of view: " + e.Message);
+                return 0f;
+            }
+        }
+
         public static Camera Camera
         {
             get

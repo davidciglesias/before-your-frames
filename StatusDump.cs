@@ -6,6 +6,7 @@ using System.Text;
 using BepInEx;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.XR;
 
 namespace BYEFrameBlink
 {
@@ -15,6 +16,36 @@ namespace BYEFrameBlink
     /// </summary>
     internal static class StatusDump
     {
+        /// <summary>SteamVR's view of the last ~90 frames: app frame interval, GPU time, how many frames it had to reuse.</summary>
+        public static string FrameTiming()
+        {
+            try
+            {
+                Valve.VR.CVRCompositor comp = Valve.VR.OpenVR.Compositor;
+                if (comp == null) return "no compositor";
+                var t = new Valve.VR.Compositor_FrameTiming[90];
+                for (int i = 0; i < t.Length; i++) t[i].m_nSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(Valve.VR.Compositor_FrameTiming));
+                uint n = comp.GetFrameTimings(t);
+                if (n == 0) return "no frames";
+                float gpu = 0, interval = 0, cpu = 0; int reused = 0, dropped = 0;
+                for (int i = 0; i < n; i++)
+                {
+                    gpu += t[i].m_flTotalRenderGpuMs;
+                    interval += t[i].m_flClientFrameIntervalMs;
+                    cpu += t[i].m_flNewFrameReadyMs - t[i].m_flNewPosesReadyMs;
+                    if (t[i].m_nNumFramePresents > 1) reused++;
+                    dropped += (int)t[i].m_nNumDroppedFrames;
+                }
+                return $"frames={n} appInterval={interval / n:F1}ms (~{1000f / (interval / n):F0} fps) gpu={gpu / n:F1}ms cpuToReady={cpu / n:F1}ms reused={reused} dropped={dropped} " +
+                       $"scale={UnityEngine.XR.XRSettings.eyeTextureResolutionScale:F2} viewport={UnityEngine.XR.XRSettings.renderViewportScale:F2} msaa={QualitySettings.antiAliasing} hdr={(Camera.main != null && Camera.main.allowHDR)} shadows={QualitySettings.shadows}";
+            }
+            catch (System.Exception e) { return "error: " + e.Message; }
+        }
+
+        private static bool _probeInstalled;
+        private static Matrix4x4 _renderView;
+        private static int _renderFrame;
+
         public static void Write(string tag)
         {
             var f = new List<KeyValuePair<string, object>>();
@@ -56,6 +87,46 @@ namespace BYEFrameBlink
             Add("headYaw", head.eulerAngles.y);
             Add("positionalTracking", Plugin.PositionalTracking.Value);
             Transform child = HeadTracking.ChildCamera;
+            // Where the headset actually renders "straight ahead" vs the head pose the aim ray is built from: the
+            // forward of each eye's view matrix, expressed in the aim frame (yaw +right, pitch +up, degrees).
+            if (child != null && child.parent != null && Camera.main != null && UnityEngine.XR.XRSettings.enabled)
+            {
+                Quaternion aim = child.parent.rotation * head;
+                string Dir(Vector3 world)
+                {
+                    Vector3 d = Quaternion.Inverse(aim) * world;
+                    return $"{Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg:F2}/{Mathf.Atan2(d.y, new Vector2(d.x, d.z).magnitude) * Mathf.Rad2Deg:F2}";
+                }
+                Vector3 Fwd(Camera.StereoscopicEye e) => -Camera.main.GetStereoViewMatrix(e).inverse.GetColumn(2);
+                string Node(XRNode n) => Dir(child.parent.rotation * InputTracking.GetLocalRotation(n) * Vector3.forward);
+                if (!_probeInstalled)
+                {
+                    _probeInstalled = true;
+                    Camera.onPreRender += c => { if (c == Camera.main) { _renderView = c.worldToCameraMatrix; _renderFrame = Time.frameCount; } };
+                }
+                Add("renderedFwd", _renderFrame > 0 ? $"{Dir(-_renderView.inverse.GetColumn(2))} (frame {Time.frameCount - _renderFrame} ago)" : "none yet, ask again");
+                Add("renderVsAim", $"viewL={Dir(Fwd(Camera.StereoscopicEye.Left))} viewR={Dir(Fwd(Camera.StereoscopicEye.Right))} " +
+                                   $"centerEye={Node(XRNode.CenterEye)} leftEye={Node(XRNode.LeftEye)} rightEye={Node(XRNode.RightEye)} camFwd={Dir(Camera.main.transform.forward)}");
+            }
+            try
+            {
+                Valve.VR.CVRSystem vr = Valve.VR.OpenVR.System;
+                if (vr != null)
+                {
+                    string Eye(Valve.VR.EVREye e)
+                    {
+                        Valve.VR.HmdMatrix34_t m = vr.GetEyeToHeadTransform(e);
+                        // OpenVR is right-handed (-z forward): forward = -column 2.
+                        float fx = -m.m2, fy = -m.m6, fz = -m.m10;
+                        float l = 0, r = 0, t = 0, b = 0;
+                        vr.GetProjectionRaw(e, ref l, ref r, ref t, ref b);
+                        return $"fwd yaw={Mathf.Atan2(fx, -fz) * Mathf.Rad2Deg:F2} pitch={Mathf.Asin(Mathf.Clamp(fy, -1f, 1f)) * Mathf.Rad2Deg:F2} " +
+                               $"pos=({m.m3:F3},{m.m7:F3},{m.m11:F3}) raw l={l:F3} r={r:F3} t={t:F3} b={b:F3}";
+                    }
+                    Add("openvrEyes", $"L[{Eye(Valve.VR.EVREye.Eye_Left)}] R[{Eye(Valve.VR.EVREye.Eye_Right)}]");
+                }
+            }
+            catch (System.Exception e) { Add("openvrEyes", "error: " + e.Message); }
             Add("childLocalX", child != null ? child.localPosition.x : 0f);
             Add("childLocalY", child != null ? child.localPosition.y : 0f);
             Add("childLocalZ", child != null ? child.localPosition.z : 0f);
@@ -128,6 +199,15 @@ namespace BYEFrameBlink
                                 $"dynRes={(Camera.main != null && Camera.main.allowDynamicResolution)} scaler={ScalableBufferManager.widthScaleFactor:F2}");
             Add("render", $"shadowRes={QualitySettings.shadowResolution} dist={QualitySettings.shadowDistance:F0} cascades={QualitySettings.shadowCascades} proj={QualitySettings.shadowProjection} " +
                           (Camera.main != null ? $"path={Camera.main.actualRenderingPath} msaa={Camera.main.allowMSAA} hdr={Camera.main.allowHDR} far={Camera.main.farClipPlane:F0}" : ""));
+            if (Camera.main != null)
+            {
+                Camera c = Camera.main;
+                string P(Matrix4x4 m) => $"m00={m.m00:F3} m02={m.m02:F3} m11={m.m11:F3} m12={m.m12:F3}";
+                Add("projection", $"mono[{P(c.projectionMatrix)}] L[{P(c.GetStereoProjectionMatrix(Camera.StereoscopicEye.Left))}] R[{P(c.GetStereoProjectionMatrix(Camera.StereoscopicEye.Right))}] " +
+                                  $"pixels={c.pixelWidth}x{c.pixelHeight} aspect={c.aspect:F3} fov={c.fieldOfView:F1} sep={c.stereoSeparation:F3}");
+            }
+            Add("autoResolution", $"{BYEFrameBlink.AutoResolution.Label} factor={BYEFrameBlink.AutoResolution.Factor:F2} gpu={BYEFrameBlink.AutoResolution.LastGpuMs:F1}ms reused={BYEFrameBlink.AutoResolution.LastReused}");
+            Add("performance", $"{BYEFrameBlink.Performance.Label} wine={BYEFrameBlink.Performance.OnWine}");
             Add("uiQuadScale", uiQuad != null ? uiQuad.transform.lossyScale.ToString("F2") : "");
             Add("vrMenuEntries", VrSettingsMenu.Entries);
             Add("vrMenuOpen", VrSettingsMenu.IsOpen);

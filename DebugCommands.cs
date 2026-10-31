@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -68,6 +69,154 @@ namespace BYEFrameBlink
             ControllerShortcuts.DumpChanges("Right", ref _watchPrevRight, ref _watchPrevRightTouched);
         }
 
+        /// <summary>
+        /// Live GPU-cost experiments: "/bye/gfx scale 0.7", "hdr 0", "shadows 0|1|2" (off/hard/all), "pp 0" (whole
+        /// post-processing stack off), "shadowdist 20". Logged; not saved (except scale, which is Render Scale).
+        /// </summary>
+        private static void Gfx(string arg)
+        {
+            string[] a = (arg ?? "").Split(' ');
+            if (a.Length != 2) { Plugin.Log.LogWarning($"[cmd] gfx: '{arg}'?"); return; }
+            float v = float.Parse(a[1], NumberStyles.Float, CultureInfo.InvariantCulture);
+            switch (a[0])
+            {
+                case "scale": Plugin.RenderScale.Value = v; break;
+                case "hdr": foreach (Camera c in Camera.allCameras) c.allowHDR = v != 0f; break;
+                case "shadows": QualitySettings.shadows = v == 0f ? ShadowQuality.Disable : v == 1f ? ShadowQuality.HardOnly : ShadowQuality.All; break;
+                case "shadowdist": QualitySettings.shadowDistance = v; break;
+                case "pp":
+                    foreach (Camera c in Camera.allCameras)
+                    {
+                        var ppb = c.GetComponent<UnityEngine.PostProcessing.PostProcessingBehaviour>();
+                        if (ppb != null) ppb.enabled = v != 0f;
+                    }
+                    break;
+                default: Plugin.Log.LogWarning($"[cmd] gfx: unknown '{a[0]}'"); return;
+            }
+            Plugin.Log.LogInfo($"[cmd] gfx {a[0]} = {a[1]}");
+        }
+
+        /// <summary>
+        /// Everything that could tint the view: every visible canvas graphic (any canvas, with its render mode and how
+        /// much of the canvas it covers) and every renderer attached under a camera (quads held in front of the lens).
+        /// </summary>
+        private static void ViewLayers()
+        {
+            foreach (Graphic g in UnityEngine.Object.FindObjectsOfType<Graphic>())
+            {
+                if (!g.isActiveAndEnabled || g.canvas == null) continue;
+                float alpha = g.color.a * g.canvasRenderer.GetInheritedAlpha();
+                if (alpha < 0.02f) continue;
+                Canvas root = g.canvas.rootCanvas;
+                var rootRt = (RectTransform)root.transform;
+                Vector2 size = Vector2.Scale(g.rectTransform.rect.size, g.rectTransform.lossyScale);
+                Vector2 rootSize = Vector2.Scale(rootRt.rect.size, rootRt.lossyScale);
+                float cover = rootSize.x > 0 && rootSize.y > 0 ? Mathf.Min(size.x / rootSize.x, size.y / rootSize.y) : 0f;
+                if (cover < 0.5f) continue;
+                Plugin.Log.LogInfo($"[cmd] layer graphic {PathOf(g.transform)} type={g.GetType().Name} color={g.color} alpha={alpha:F2} cover={cover:F2} " +
+                                   $"canvas={root.name}/{root.renderMode} cam={(root.worldCamera != null ? root.worldCamera.name : "-")} material={(g.material != null ? g.material.name : "-")}");
+            }
+            foreach (Camera cam in Camera.allCameras)
+            {
+                foreach (Renderer r in cam.GetComponentsInChildren<Renderer>())
+                {
+                    if (!r.enabled || !r.gameObject.activeInHierarchy) continue;
+                    Material m = r.sharedMaterial;
+                    Plugin.Log.LogInfo($"[cmd] layer attached {PathOf(r.transform)} under={cam.name} type={r.GetType().Name} layer={r.gameObject.layer} " +
+                                       $"local={cam.transform.InverseTransformPoint(r.bounds.center):F2} size={r.bounds.size:F2} material={(m != null ? m.name + "/" + m.shader.name : "-")}" +
+                                       (m != null && m.HasProperty("_Color") ? $" color={m.color}" : ""));
+                }
+            }
+            // What each extra game camera (not the main one, not UUVR's) can see: e.g. the game's "UI Camera" draws
+            // its own layers over the world and is head-locked in VR.
+            foreach (Camera cam in Camera.allCameras)
+            {
+                if (cam == Camera.main || cam.name.StartsWith("Vr") || cam.name.StartsWith("Uuvr") || cam.targetTexture != null) continue;
+                foreach (Renderer r in UnityEngine.Object.FindObjectsOfType<Renderer>())
+                {
+                    if (!r.enabled || !r.gameObject.activeInHierarchy || (cam.cullingMask & (1 << r.gameObject.layer)) == 0) continue;
+                    Material m = r.sharedMaterial;
+                    Plugin.Log.LogInfo($"[cmd] layer seenby={cam.name} {PathOf(r.transform)} type={r.GetType().Name} layer={r.gameObject.layer} " +
+                                       $"local={cam.transform.InverseTransformPoint(r.bounds.center):F2} size={r.bounds.size:F2} material={(m != null ? m.name + "/" + m.shader.name : "-")}");
+                }
+            }
+            Plugin.Log.LogInfo("[cmd] layer scan done");
+        }
+
+        /// <summary>
+        /// What the left eye sees, edge to edge: the world camera with that eye's last view/projection (post-processing
+        /// included), then UUVR's overlay camera (UI panel, eyelids, vignette, reticle) on top with its own.
+        /// </summary>
+        private static void EyeShot(string name)
+        {
+            Camera main = Camera.main, overlay = UiOverlay.Camera;
+            if (main == null || !RenderedView.HasMain) { Plugin.Log.LogWarning("[cmd] eyeshot: no rendered eye yet"); return; }
+            string dir = Path.Combine(Paths.BepInExRootPath, "BYEFrameBlink_shots");
+            Directory.CreateDirectory(dir);
+            string path = Path.Combine(dir, (string.IsNullOrEmpty(name) ? "eye" : name) + ".png");
+            var rt = new RenderTexture(1440, 1440, 24, RenderTextureFormat.ARGB32);
+            RenderTexture prevActive = RenderTexture.active;
+            try
+            {
+                RenderCam(main, rt, RenderedView.MainView, RenderedView.MainProj, null);
+                if (overlay != null && RenderedView.HasOverlay) RenderCam(overlay, rt, RenderedView.OverlayView, RenderedView.OverlayProj, CameraClearFlags.Depth);
+                RenderTexture.active = rt;
+                var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
+                tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+                tex.Apply();
+                File.WriteAllBytes(path, tex.EncodeToPNG());
+                UnityEngine.Object.Destroy(tex);
+                Plugin.Log.LogInfo($"[cmd] eyeshot -> {path}");
+            }
+            finally
+            {
+                RenderTexture.active = prevActive;
+                rt.Release();
+                UnityEngine.Object.Destroy(rt);
+            }
+        }
+
+        private static void RenderCam(Camera cam, RenderTexture rt, Matrix4x4 view, Matrix4x4 proj, CameraClearFlags? clear)
+        {
+            RenderTexture prevTarget = cam.targetTexture;
+            StereoTargetEyeMask prevEye = cam.stereoTargetEye;
+            CameraClearFlags prevClear = cam.clearFlags;
+            try
+            {
+                cam.stereoTargetEye = StereoTargetEyeMask.None;
+                cam.targetTexture = rt;
+                if (clear.HasValue) cam.clearFlags = clear.Value;
+                cam.worldToCameraMatrix = view;
+                cam.projectionMatrix = proj;
+                cam.Render();
+            }
+            finally
+            {
+                cam.ResetWorldToCameraMatrix();
+                cam.ResetProjectionMatrix();
+                cam.clearFlags = prevClear;
+                cam.targetTexture = prevTarget;
+                cam.stereoTargetEye = prevEye;
+            }
+        }
+
+        /// <summary>"/bye/toggle UI Camera 0": enable/disable the cameras and renderers on every object with that name.</summary>
+        private static void Toggle(string arg)
+        {
+            int sp = (arg ?? "").LastIndexOf(' ');
+            if (sp <= 0) { Plugin.Log.LogWarning($"[cmd] toggle: '{arg}'?"); return; }
+            string name = arg.Substring(0, sp);
+            bool on = arg.Substring(sp + 1) != "0";
+            int n = 0;
+            foreach (Transform t in Resources.FindObjectsOfTypeAll<Transform>())
+            {
+                if (!t.gameObject.scene.IsValid() || t.name != name) continue;
+                foreach (Camera c in t.GetComponents<Camera>()) { c.enabled = on; n++; }
+                foreach (Renderer r in t.GetComponents<Renderer>()) { r.enabled = on; n++; }
+            }
+            Plugin.Log.LogInfo($"[cmd] toggle '{name}' {(on ? "on" : "off")}: {n} component(s)");
+        }
+
         private static void Run(string address, string arg)
         {
             switch (address)
@@ -78,7 +227,14 @@ namespace BYEFrameBlink
                 case "/bye/buttons": ListButtons(); break;
                 case "/bye/controllers": WatchControllers(arg); break;
                 case "/bye/vignette": VignetteVR.Force(arg); break;
+                case "/bye/perf": Plugin.Performance.Value = (PerformanceMode)Enum.Parse(typeof(PerformanceMode), arg, true); break;
+                case "/bye/msaa": Plugin.PerformanceMsaa.Value = int.Parse(arg); break;
                 case "/bye/padblink": ControllerShortcuts.SimulatedBlinkHeld = arg == "1"; break;
+                case "/bye/timing": Plugin.Log.LogInfo("[cmd] timing " + StatusDump.FrameTiming()); break;
+                case "/bye/gfx": Gfx(arg); break;
+                case "/bye/viewlayers": ViewLayers(); break;
+                case "/bye/toggle": Toggle(arg); break;
+                case "/bye/eyeshot": EyeShot(arg); break;
                 case "/bye/pp":
                 {
                     // "/bye/pp ambientOcclusion off": toggle one post-processing model on the current profile.
@@ -145,7 +301,15 @@ namespace BYEFrameBlink
                     GameManager gm = GameManager.instance;
                     if (gm == null || gm._scenePrefabSequence == null || BlinkCounter.instance == null) { Plugin.Log.LogWarning("[cmd] goto: not in gameplay"); break; }
                     var seq = gm._scenePrefabSequence._scenePrefabs;
-                    int idx = seq.FindIndex(n => string.Equals(n, arg, StringComparison.OrdinalIgnoreCase));
+                    // "prev" / "next": relative to the scene being played, so a scene can be replayed without naming it.
+                    int idx = arg == "prev" ? gm._currentSceneId - 1 : arg == "next" ? gm._currentSceneId + 1 : -1;
+                    if (arg.StartsWith("#") && int.TryParse(arg.Substring(1), out int n)) idx = n; // by sequence index
+                    if (arg == "list")
+                    {
+                        for (int i = 0; i < seq.Count; i++) Plugin.Log.LogInfo($"[cmd] sequence #{i} {seq[i]}{(i == gm._currentSceneId ? "  <- current" : "")}");
+                        break;
+                    }
+                    if (idx < 0) idx = seq.FindIndex(n => string.Equals(n, arg, StringComparison.OrdinalIgnoreCase));
                     if (idx < 0) idx = seq.FindIndex(n => n.IndexOf(arg, StringComparison.OrdinalIgnoreCase) >= 0);
                     // Drop the scene the game already preloaded (and any preload still running), or the next scene change
                     // after the jump loads that one and the sequence plays a scene twice.

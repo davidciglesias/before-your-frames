@@ -163,7 +163,7 @@ try {
         $v0 = Status 'vr-entry'
         Check 'vr settings entry in the main menu' ($v0.vrMenuEntries -ge 1) "entries=$($v0.vrMenuEntries)"
         $r = MenuPress 'VR Settings Button' 'vr-open'
-        Check 'gaze+blink opens VR settings' ([bool]$r[1].vrMenuOpen -and ($r[1].vrMenuRows -eq 9)) "open=$($r[1].vrMenuOpen) rows=$($r[1].vrMenuRows)"
+        Check 'gaze+blink opens VR settings' ([bool]$r[1].vrMenuOpen -and ($r[1].vrMenuRows -eq 10)) "open=$($r[1].vrMenuOpen) rows=$($r[1].vrMenuRows)"
         $sep0 = $r[1].eyeSeparation
         $r = MenuPress 'VR World Size Button' 'vr-size'
         Check 'VR settings: world size row cycles it' (-not (Near $r[1].eyeSeparation $sep0 0.01)) "$sep0 -> $($r[1].eyeSeparation)"
@@ -198,6 +198,11 @@ try {
     if ($sn) {
         $rs = Status 'render-scale-game'
         Check 'gameplay back at Render Scale (1)' ($rs.eyeTexture -match 'scale=1\.00') "eyeTexture=$($rs.eyeTexture)"
+        Check 'performance mode auto = off on Windows' ($rs.performance -match '^auto \(off\) wine=False') "performance=$($rs.performance)"
+        & $Sim perf on; [Threading.Thread]::Sleep(1500)
+        $pf = Status 'perf-on'
+        Check 'performance mode: 2x MSAA, no HDR, shadows medium / 2 cascades / 40 m' (($pf.quality -match 'aa=2 ') -and ($pf.render -match 'hdr=False') -and ($pf.render -match 'shadowRes=(Low|Medium) dist=([0-3]?\d|40) cascades=[12] ')) "quality=$($pf.quality) render=$($pf.render)"
+        & $Sim perf auto
     }
     [Threading.Thread]::Sleep(5000)
 
@@ -359,7 +364,7 @@ try {
     & $Sim invoke PauseMenuController.Pause; [Threading.Thread]::Sleep(1500)
     & $Sim click 'vr settings'; [Threading.Thread]::Sleep(1000)
     $pv = Status 'pause-vr'
-    Check 'VR settings open from the pause menu' ([bool]$pv.vrMenuOpen -and ($pv.vrMenuRows -eq 9)) "open=$($pv.vrMenuOpen) rows=$($pv.vrMenuRows)"
+    Check 'VR settings open from the pause menu' ([bool]$pv.vrMenuOpen -and ($pv.vrMenuRows -eq 10)) "open=$($pv.vrMenuOpen) rows=$($pv.vrMenuRows)"
     & $Sim invoke PauseMenuController.Resume; [Threading.Thread]::Sleep(1000)
     $pr = Status 'pause-resume'
     Check 'resuming closes VR settings' (-not $pr.vrMenuOpen) "open=$($pr.vrMenuOpen)"
@@ -395,7 +400,7 @@ finally {
             $orig = Get-Content $CfgBackup
             foreach ($pair in @(@('Head Tracking', 'Simulate Head'), @('Head Tracking', 'Positional Tracking'), @('Debug', 'Test Mode'), @('VR', 'Show Reticle'), @('VR', 'Squint When Blink Ready'),
                                @('VR', 'Eye Separation Scale'), @('VR', 'Vignette'), @('Gaze', 'Eye Tracking'),
-                               @('VR', 'Render Scale'), @('VR', 'Menu Render Scale'))) {
+                               @('VR', 'Render Scale'), @('VR', 'Menu Render Scale'), @('VR', 'Performance Mode'))) {
                 $line = $orig | Where-Object { $_ -match "^$([regex]::Escape($pair[1])) = " } | Select-Object -First 1
                 if ($line) { Cfg $pair[0] $pair[1] ($line -split ' = ', 2)[1] }
             }

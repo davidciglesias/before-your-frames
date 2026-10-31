@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace BYEFrameBlink
 {
-    [BepInPlugin(Guid, "BYE Frame Blink", "0.3.0")]
+    [BepInPlugin(Guid, "BYE Frame Blink", "0.4.0")]
     [BepInDependency("raicuparta.uuvr-legacy", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
@@ -58,6 +58,12 @@ namespace BYEFrameBlink
         internal static ConfigEntry<bool> SmoothUi;
         internal static ConfigEntry<float> RenderScale;
         internal static ConfigEntry<float> MenuRenderScale;
+        internal static ConfigEntry<PerformanceMode> Performance;
+        internal static ConfigEntry<int> PerformanceMsaa;
+        internal static ConfigEntry<bool> PerformanceHdr;
+        internal static ConfigEntry<AutoResolutionMode> AutoResolution;
+        internal static ConfigEntry<bool> AimFromRenderedView;
+        internal static ConfigEntry<float> AutoResolutionMin;
         internal static ConfigEntry<bool> BlinkMenus;
         internal static ConfigEntry<bool> SkipIntro;
         internal static ConfigEntry<bool> IntroSeen;
@@ -141,6 +147,8 @@ namespace BYEFrameBlink
             GazeMoveReticle = Config.Bind("Gaze", "Move Reticle", true, "Draw the game's reticle where you're aiming (head + gaze) instead of on the fixed UI panel.");
             AimAssistDegrees = Config.Bind("Gaze", "Aim Assist Degrees", 3f,
                 "If the aim ray misses, also pick interactables within this cone (degrees). Bigger hitbox, no visual change. 0 = off.");
+            AimFromRenderedView = Config.Bind("Gaze", "Aim From Rendered View", true,
+                "Aim from the orientation each frame is actually drawn with instead of the head pose read earlier in the frame. Fixes targets only being hit a few degrees off what you see (seen on a Steam Frame running the game itself).");
 
             SkipIntro = Config.Bind("VR", "Skip Intro Logos", true,
                 "Go straight to the main menu at startup (skips the logo splashes and the EULA notice) once the intro has been seen.");
@@ -157,13 +165,23 @@ namespace BYEFrameBlink
             FullViewVeil = Config.Bind("VR", "Full View Veil", true,
                 "Show the game's eyelids and black fades across your whole view instead of only on the floating UI panel.");
             RenderScale = Config.Bind("VR", "Render Scale", 1f,
-                "Renders the game at this multiple of SteamVR's resolution (supersampling): sharper, but heavier on the GPU. 1 = SteamVR's choice. Also in vr settings ('render quality').");
+                "Renders the game at this multiple of SteamVR's resolution (supersampling): sharper, but heavier on the GPU. 1 = SteamVR's choice, below 1 is blurrier but lighter (0.25 to 2). Also in vr settings ('render quality').");
             MenuRenderScale = Config.Bind("VR", "Menu Render Scale", 1.5f,
                 "Render scale in the main menu, whose wide scenery looks low-res at SteamVR's resolution. It's cheap to draw, so it can be higher than Render Scale.");
+            Performance = Config.Bind("VR", "Performance Mode", PerformanceMode.Auto,
+                "For running the game on the headset itself (Proton on a Steam Frame): Performance MSAA, medium shadows, no ambient occlusion, bloom, grain or FXAA, render quality steps 80/100/125%, and Menu Render Scale ignored. Auto = on under Proton/Wine, off on Windows.");
+            PerformanceMsaa = Config.Bind("VR", "Performance MSAA", 2,
+                "Anti-aliasing samples (0, 2, 4 or 8) in performance mode. Smooths jagged edges; 2 keeps a steady frame rate on a Steam Frame, 4 costs about 4 ms more per frame.");
+            PerformanceHdr = Config.Bind("VR", "Performance HDR", false,
+                "Keep HDR rendering in performance mode. Off by default: with MSAA it is the biggest GPU cost on the headset itself (the head tracking shakes when frames are missed).");
+            AutoResolution = Config.Bind("VR", "Auto Resolution", AutoResolutionMode.Auto,
+                "Lower the render resolution a little in heavy moments so no frame is missed (a missed frame makes the view shake), and raise it again when there's headroom. Auto = on in performance mode; On also helps on PCs with slower GPUs.");
+            AutoResolutionMin = Config.Bind("VR", "Auto Resolution Min", 0.6f,
+                "The lowest fraction of Render Scale that Auto Resolution may drop to.");
             SmoothUi = Config.Bind("VR", "Smooth UI", true,
                 "Filter the floating menu/HUD panel properly (mipmaps) so its text stays crisp in the headset instead of looking jagged and shimmering.");
             VeilHalfFovDegrees = Config.Bind("VR", "Veil Half FOV Degrees", 50f,
-                "Half the vertical field of view the eyelids are stretched to. Lower = lids reach the center sooner.");
+                "Half the vertical field of view the eyelids are stretched to (at least the headset's own, read from SteamVR). Lower = lids reach the center sooner.");
             ShowReticle = Config.Bind("VR", "Show Reticle", true,
                 "Show the aiming dot during gameplay. Toggle in game with 'Reticle Toggle Key'. The menu cursor is always shown.");
             ReticleToggleKey = Config.Bind("VR", "Reticle Toggle Key", KeyCode.F10, "Show/hide the gameplay aiming dot.");
@@ -203,6 +221,7 @@ namespace BYEFrameBlink
 
             var harmony = new Harmony(Guid);
             harmony.PatchAll(typeof(Plugin).Assembly);
+            RenderedView.Install();
             InputRedirect.PatchGameInputCalls(harmony);
             HeadTracking.TryPatchUuvr(harmony);
             StereoComfort.TryPatchUuvr(harmony);
@@ -271,7 +290,9 @@ namespace BYEFrameBlink
             StereoComfort.LateUpdate();
             VignetteVR.LateUpdate();
             UiSharpness.LateUpdate();
+            BYEFrameBlink.Performance.LateUpdate();
             BYEFrameBlink.RenderScale.LateUpdate();
+            BYEFrameBlink.AutoResolution.LateUpdate();
             ReticleFollower.LateUpdate();
             Veil.LateUpdate();
             MenuGaze.LateUpdate();

@@ -22,6 +22,11 @@ Test driver for BYEFrameBlink: sends fake eyelid / head-pose OSC to the plugin (
   bye_sim.ps1 controllers [secs] log VR controller button changes for a while (default 20s)
   bye_sim.ps1 vignette <0..1|restore>  force the current vignette on (for testing), or undo
   bye_sim.ps1 padblink [ms]      hold the controller Blink Button for ms (default 150)
+  bye_sim.ps1 perf <auto|on|off> set Performance Mode (on-headset settings) live
+  bye_sim.ps1 msaa <0|2|4|8>     set Performance MSAA live
+  bye_sim.ps1 eyeshot [name]     capture exactly what the left eye sees (world + overlays), edge to edge
+  bye_sim.ps1 toggle <name> 0|1  disable/enable the cameras and renderers on objects with that name
+  bye_sim.ps1 viewlayers         log every visible canvas image, camera-attached renderer and extra-camera object
 #>
 param([Parameter(Position = 0)][string]$Cmd, [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Rest = @())
 $Values = [double[]]@($Rest | Where-Object { $null -ne ($_ -as [double]) } | ForEach-Object { [double]$_ })
@@ -108,6 +113,11 @@ switch ($Cmd) {
     'vignette' { SendString '/bye/vignette' ($Rest -join ' ') }
     'cameras'  { SendString '/bye/cameras' '' }
     'pp'       { SendString '/bye/pp' ($Rest -join ' ') }
+    'perf'     { SendString '/bye/perf' ($Rest -join ' ') }
+    'msaa'     { SendString '/bye/msaa' ($Rest -join ' ') }
+    'eyeshot'  { SendString '/bye/eyeshot' ($Rest -join ' ') }
+    'toggle'   { SendString '/bye/toggle' ($Rest -join ' ') }
+    'viewlayers' { SendString '/bye/viewlayers' '' }
     'padblink' { $ms = if ($Values.Count) { $Values[0] } else { 150 }; SendString '/bye/padblink' '1'; [Threading.Thread]::Sleep([int]$ms); SendString '/bye/padblink' '0' }
     default    { Get-Help $MyInvocation.MyCommand.Path -Full | Out-String | Write-Output }
 }

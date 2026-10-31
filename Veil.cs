@@ -75,7 +75,7 @@ namespace BYEFrameBlink
                 Rescan();
             }
 
-            float halfH = Distance * Mathf.Tan(Plugin.VeilHalfFovDegrees.Value * Mathf.Deg2Rad);
+            float halfH = Distance * Mathf.Tan(UiOverlay.VeilHalfFovDegrees * Mathf.Deg2Rad);
 
             UpperAlpha = LowerAlpha = FullAlpha = 0f;
             UpperEdgeFrac = 1f;

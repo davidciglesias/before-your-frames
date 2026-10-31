@@ -104,7 +104,7 @@ namespace BYEFrameBlink
             var shape = new Vector3(s.center.x, s.center.y, aspect);
             if ((p - _baked).sqrMagnitude > 1e-8f || (shape - _bakedShape).sqrMagnitude > 1e-8f) Bake(p, s.center, aspect);
 
-            float halfH = Distance * Mathf.Tan(Plugin.VeilHalfFovDegrees.Value * Mathf.Deg2Rad);
+            float halfH = Distance * Mathf.Tan(UiOverlay.VeilHalfFovDegrees * Mathf.Deg2Rad);
             _sprite.enabled = true;
             _sprite.color = new Color(s.color.r, s.color.g, s.color.b, 1f);
             _sprite.transform.localPosition = new Vector3(0f, 0f, Distance);

@@ -113,7 +113,15 @@ namespace BYEFrameBlink
 
             Quaternion gaze = LocalRotation;
             Transform head = UnityEngine.XR.XRSettings.enabled ? FindHead(cam) : null;
-            if (head != null && head.parent != null)
+            if (head != null && RenderedView.TryGet(cam, out Quaternion rendered) && head.parent != null &&
+                Quaternion.Angle(rendered, head.parent.rotation * HeadTracking.ReadHeadRotation()) < 20f) // else not the view you see (paused, other pass)
+            {
+                // The orientation the frame was actually drawn with. On a Steam Frame running the game itself it sits
+                // several degrees off the tracking pose read in Update, so aiming from that pose missed what you see.
+                Vector3 origin = head.parent != null ? head.parent.TransformPoint(head.localPosition) : head.position;
+                LastGazeRay = new Ray(origin, rendered * gaze * Vector3.forward);
+            }
+            else if (head != null && head.parent != null)
             {
                 // VrChildCamera sits under VrCameraOffset (identity offset from the game camera, or horizon-aligned).
                 Quaternion baseRot = head.parent.rotation;

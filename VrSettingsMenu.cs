@@ -164,6 +164,7 @@ namespace BYEFrameBlink
             AddRow(c, "VR Recenter Button", () => "recenter view now", () => HeadTracking.Recenter());
             AddRow(c, "VR Head Movement Button", () => "head movement: " + OnOff(Plugin.PositionalTracking.Value), Plugin.TogglePositionalTracking);
             AddRow(c, "VR Render Quality Button", () => "render quality (in game): " + RenderScale.Label, RenderScale.Cycle);
+            AddRow(c, "VR Performance Button", () => "performance mode: " + Performance.Label, Performance.Cycle);
             AddRow(c, "VR Vignette Button", () => "vignette: " + Plugin.VignetteLabel, Plugin.CycleVignette);
             AddRow(c, "VR Back Button", () => "back", () => Close(true), true);
         }
