@@ -1,4 +1,4 @@
-# BYE Frame Blink
+﻿# BYE Frame Blink
 
 Play **Before Your Eyes** in VR on a **Steam Frame**, with your real blinks and eye gaze.
 
@@ -19,7 +19,7 @@ Your normal mouse still works as a fallback.
 
 ## Status
 
-Works on the author's Steam Frame. The whole game has also been played from start to the credits with an automated bot that drives the same input paths a player uses (simulated eyes and head), and 67 regression tests pass. Please open an issue if something misbehaves on your setup.
+Works on the author's Steam Frame. The whole game has also been played from start to the credits with an automated bot that drives the same input paths a player uses (simulated eyes and head), and 102 regression tests pass. Please open an issue if something misbehaves on your setup.
 
 The eye data comes from frameeyeosc, an experimental tool that reads a private interface of the headset software, so a headset update can break it.
 
@@ -54,7 +54,7 @@ The plugin listens for OSC messages over UDP on port **9000** and understands th
 | Data | Address |
 |---|---|
 | Eyelid openness (0 shut, about 0.75 relaxed, 1 wide) | `/avatar/parameters/FT/v2/EyeLidLeft`, `.../EyeLidRight` |
-| Gaze (1.0 = 45°) | `/avatar/parameters/FT/v2/EyeLeftX`, `EyeLeftY`, `EyeRightX`, `EyeRightY` |
+| Gaze (1.0 = 45Â°) | `/avatar/parameters/FT/v2/EyeLeftX`, `EyeLeftY`, `EyeRightX`, `EyeRightY` |
 
 ### Install frameeyeosc on the Frame (once)
 
@@ -114,7 +114,7 @@ All settings are in `BepInEx\config\byeframeblink.cfg`; the defaults should work
 - **Targets are hard to hit:** raise `Aim Assist Degrees` (3 by default, 0 turns it off).
 - **Head position:** set `Positional Tracking = true`. `Position Scale` scales the movement.
 - **Recentering:** `Recenter On Scene Start` (default on) makes the direction you're facing straight ahead at the start of every scene, since each scene is framed for that view. F6 does it any time, and Shift+F6 turns this on or off in game. These keys and F10/F11 show a short message in your view.
-- **Menus:** look roughly at an option and do a deliberate blink. The option nearest to where you look is selected if it is within `Menu Snap Degrees` (8; Back buttons reach further), and while a menu is open its panel is drawn `Menu Panel Scale` (1.5×) bigger so options are spread apart. `Menu Blink Seconds` (0.3) is how long the press blink must last; natural blinks are ignored.
+- **Menus:** look roughly at an option and do a deliberate blink. The option nearest to where you look is selected if it is within `Menu Snap Degrees` (8; Back buttons reach further), and while a menu is open its panel is drawn `Menu Panel Scale` (1.5Ã—) bigger and the main and pause menu options are spaced `Menu Spacing` (1.35Ã—) farther apart, so they are easier to pick. `Menu Blink Seconds` (0.3) is how long the press blink must last; natural blinks are ignored.
 - **Intro:** `Skip Intro Logos` skips the splash screens after the first launch.
 - **Aiming dot:** `Show Reticle` (F10 toggles it). `Reticle At Target Depth` draws the dot at the distance of what you look at, so it doesn't split in two when you focus on something close.
 
@@ -127,6 +127,8 @@ The game was framed for a flat screen, and many scenes put objects a few centime
 - Some of the game's effects are drawn for the flat camera and in a headset stick to your view as you turn your head. These are off by default: `Disable Volumetric Lights` (light shafts and haze) and `Disable Screen Space Reflections`. The water's reflections are re-rendered for each eye instead (`VR Water Reflections`, sharpness `Water Reflection Resolution`); `Disable Water Reflections` turns them off entirely if that's too slow.
 - **Sharpness.** SteamVR picks the render resolution, and over a headset's wide field of view it is much coarser than a monitor, which shows most on the main menu's wide scenery. `Menu Render Scale` (default 1.5) renders the main menu sharper; it's cheap to draw there. `Render Scale` (default 1, also "render quality" in vr settings) does the same in game, at a GPU cost. Raising the game's resolution in SteamVR's per-app video settings works too. `Smooth UI` (default on) keeps menu text crisp instead of jagged.
 - `Vignette` (default `Stretched`): the edge darkening the game uses for mood at some moments is drawn across your whole view instead of on the flat image. `Off` removes it, `Original` keeps the flat-screen version.
+- `Render From Head Pose` (default on): while each frame is drawn, the game camera is turned to your head pose, so shading that depends on the view (for example the room tint in one chapter 3 scene) stays in the world instead of following your head.
+- **The camera you hold in some scenes:** it stays in front of you and points where you look (`Camera Device Follows View`, `Camera Device Follows Eyes`). `Camera Device Distance` (3) draws it farther away at the same size so it's easier to focus on, `Camera Device Size` (1.6) enlarges it so its edges stay out of view, and `Camera Device Sharp Frame` (on) draws its frame from a sharpened, higher-resolution copy. `Sync UI Camera` (on) draws the game's in-world UI from exactly your view, so the viewfinder sits on the aiming dot.
 - `Squint When Blink Ready` (default off): in the flat game the eyelids rise a little when a scene-ending blink is ready, which in VR shows up as a grey band at the edge of your view. The metronome icon still tells you.
 
 ## Troubleshooting
@@ -138,7 +140,7 @@ The game was framed for a flat screen, and many scenes put objects a few centime
 - **A "no webcam" warning appears when you start playing.** The game checks for a webcam even though this mod never uses one. With `Block Webcam = true` the plugin skips that check; if a warning still shows up, you can ignore it (blinks come from the headset) and please open an issue with a photo of it.
 - **Aim is off after a headset update.** frameeyeosc may need an update; try `Invert X/Y` and the offsets in the meantime.
 
-The BepInEx log is `BepInEx\LogOutput.log`; attach it to bug reports.
+The BepInEx log is `BepInEx\LogOutput.log`; attach it to bug reports, along with the mod version shown under the game version in the main menu (`VR V ...`).
 
 ## Building from source and testing
 

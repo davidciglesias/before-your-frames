@@ -45,6 +45,7 @@ namespace BYEFrameBlink
         {
             Active = Plugin.BlinkMenus.Value && UnityEngine.XR.XRSettings.enabled && EventSystem.current != null && !InGameplay();
             ScalePanel(Active ? Mathf.Clamp(Plugin.MenuPanelScale.Value, 0.5f, 3f) : 1f);
+            MenuSpread.Update(Active);
             if (!Active)
             {
                 SetHover(null);

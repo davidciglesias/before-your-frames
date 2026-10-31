@@ -370,8 +370,13 @@ try {
     Check 'resuming closes VR settings' (-not $pr.vrMenuOpen) "open=$($pr.vrMenuOpen)"
     & $Sim invoke PauseMenuController.Pause; [Threading.Thread]::Sleep(1500)
     $n0 = (Get-Content $Log).Count
-    & $Sim buttons; [Threading.Thread]::Sleep(1500)
-    $pauseButtons = (Get-Content $Log | Select-Object -Skip $n0) -join "`n"
+    & $Sim buttons
+    # The log is flushed asynchronously: wait for the button list instead of reading it after a fixed delay.
+    $pauseButtons = ''
+    for ($w = 0; $w -lt 30 -and $pauseButtons -notmatch "\(Quit Button\)"; $w++) {
+        [Threading.Thread]::Sleep(200)
+        $pauseButtons = (Get-Content $Log | Select-Object -Skip $n0) -join "`n"
+    }
     Check 'pause menu whole again after VR settings' (($pauseButtons -match "\(Resume Button\)") -and ($pauseButtons -match "\(Quit Button\)") -and -not ($pauseButtons -match "\(VR World Size Button\)")) ''
     & $Sim invoke PauseMenuController.Resume; [Threading.Thread]::Sleep(1000)
 

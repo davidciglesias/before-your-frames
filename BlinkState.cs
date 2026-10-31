@@ -76,6 +76,7 @@ namespace BYEFrameBlink
             // Debug key bypasses the filters entirely.
             bool button = ControllerShortcuts.BlinkHeld;
             _closed = _filtered || button || Input.GetKey(Plugin.ForceBlinkKey.Value) || AutoPlay.ForceClosed;
+            if (Freeze.Active) _closed = false;
 
             if (_closed && !_prevClosed)
             {

@@ -6,11 +6,12 @@ using UnityEngine;
 
 namespace BYEFrameBlink
 {
-    [BepInPlugin(Guid, "BYE Frame Blink", "0.4.0")]
+    [BepInPlugin(Guid, "BYE Frame Blink", Version)]
     [BepInDependency("raicuparta.uuvr-legacy", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
         public const string Guid = "byeframeblink";
+        public const string Version = "0.5.0";
 
         internal static ManualLogSource Log;
         internal static Plugin Instance;
@@ -63,17 +64,25 @@ namespace BYEFrameBlink
         internal static ConfigEntry<bool> PerformanceHdr;
         internal static ConfigEntry<AutoResolutionMode> AutoResolution;
         internal static ConfigEntry<bool> AimFromRenderedView;
+        internal static ConfigEntry<float> RevealSphereScale;
         internal static ConfigEntry<float> AutoResolutionMin;
         internal static ConfigEntry<bool> BlinkMenus;
         internal static ConfigEntry<bool> SkipIntro;
         internal static ConfigEntry<bool> IntroSeen;
         internal static ConfigEntry<float> MenuBlinkSeconds;
         internal static ConfigEntry<float> MenuSnapDegrees;
-        internal static ConfigEntry<float> MenuPanelScale;
+        internal static ConfigEntry<float> MenuPanelScale, MenuSpacing;
         internal static ConfigEntry<float> VeilHalfFovDegrees;
         internal static ConfigEntry<bool> ShowReticle;
         internal static ConfigEntry<KeyCode> ReticleToggleKey;
+        internal static ConfigEntry<KeyCode> FreezeKey;
         internal static ConfigEntry<bool> ReticleAtTargetDepth;
+        internal static ConfigEntry<bool> CameraDeviceFollow, CameraDeviceFollowGaze;
+        internal static ConfigEntry<bool> SyncUiCamera, ViewSyncEnabled, ParticlesFaceHead;
+        internal static ConfigEntry<float> ParticleMaxSize;
+        internal static ConfigEntry<float> CameraDeviceDistance, CameraDeviceSize;
+        internal static ConfigEntry<int> CameraDeviceResolution;
+        internal static ConfigEntry<bool> CameraDeviceSharpFrame;
         internal static ConfigEntry<float> EyeSeparationScale;
         internal static ConfigEntry<KeyCode> EyeSeparationKey;
         internal static ConfigEntry<bool> DisableDepthOfField;
@@ -160,6 +169,7 @@ namespace BYEFrameBlink
                 "How long the eyes must stay closed for a blink to press a menu button (natural blinks are ~0.1-0.15 s).");
             MenuSnapDegrees = Config.Bind("VR", "Menu Snap Degrees", 8f,
                 "In menus, the button nearest to where you look is selected if it's within this many degrees, so you don't have to hit it exactly.");
+            MenuSpacing = Config.Bind("VR", "Menu Spacing", 1.35f, "How much farther apart a menu's options are spread vertically while it's open in VR, so they're easier to pick by gaze (1 = as the game lays them out).");
             MenuPanelScale = Config.Bind("VR", "Menu Panel Scale", 1.5f,
                 "How much bigger the menu panel is drawn while a menu is open (spreads the options apart). 1 = UUVR's normal size.");
             FullViewVeil = Config.Bind("VR", "Full View Veil", true,
@@ -178,6 +188,8 @@ namespace BYEFrameBlink
                 "Lower the render resolution a little in heavy moments so no frame is missed (a missed frame makes the view shake), and raise it again when there's headroom. Auto = on in performance mode; On also helps on PCs with slower GPUs.");
             AutoResolutionMin = Config.Bind("VR", "Auto Resolution Min", 0.6f,
                 "The lowest fraction of Render Scale that Auto Resolution may drop to.");
+            RevealSphereScale = Config.Bind("VR", "Reveal Sphere Scale", 1f,
+                "Enlarges the spheres some scenes use to change the room's look (e.g. to night), which are sized for a flat screen and show their edges in a headset's wider view. 1 = as the game sets them.");
             SmoothUi = Config.Bind("VR", "Smooth UI", true,
                 "Filter the floating menu/HUD panel properly (mipmaps) so its text stays crisp in the headset instead of looking jagged and shimmering.");
             VeilHalfFovDegrees = Config.Bind("VR", "Veil Half FOV Degrees", 50f,
@@ -185,6 +197,20 @@ namespace BYEFrameBlink
             ShowReticle = Config.Bind("VR", "Show Reticle", true,
                 "Show the aiming dot during gameplay. Toggle in game with 'Reticle Toggle Key'. The menu cursor is always shown.");
             ReticleToggleKey = Config.Bind("VR", "Reticle Toggle Key", KeyCode.F10, "Show/hide the gameplay aiming dot.");
+            ViewSyncEnabled = Config.Bind("VR", "Render From Head Pose", true, "While drawing, turn the game camera to your head pose so particles (e.g. fog) and view-dependent shading sit right in the world instead of following your head.");
+            ParticleMaxSize = Config.Bind("VR", "Particle Max Screen Size", 0f, "Unity shrinks particles bigger than this many screen-widths to fit; sized for a flat screen, it made big fog patches resize with your view so they followed your head. 0 = leave the game's value.");
+            ParticlesFaceHead = Config.Bind("VR", "Particles Face Head", false, "Turn billboard particles (fog, dust) toward your head's position instead of laying them flat to the view, so they stay put when you turn your head.");
+            SyncUiCamera = Config.Bind("VR", "Sync UI Camera", true, "Draw the game's in-world UI (e.g. the camera viewfinder) with exactly the main view, so it lines up with what it frames.");
+            CameraDeviceFollow = Config.Bind("VR", "Camera Device Follows View", true,
+                "In the scenes where you hold a camera, keep it (and the photo it takes) on the view you see as you turn your head.");
+            CameraDeviceFollowGaze = Config.Bind("VR", "Camera Device Follows Eyes", true,
+                "Also point the camera where your eyes look (with eye tracking).");
+            CameraDeviceSize = Config.Bind("VR", "Camera Device Size", 1.6f,
+                "How much bigger the camera's viewfinder is drawn, so its edges sit outside the headset's wider view (1 = as the game draws it).");
+            CameraDeviceSharpFrame = Config.Bind("VR", "Camera Device Sharp Frame", true, "Draw the camera viewfinder's frame from a sharpened, higher-resolution copy (the game's is blurry when drawn this large).");
+            CameraDeviceResolution = Config.Bind("VR", "Camera Device Resolution", 0, "Width (pixels) of the camera viewfinder's image; the game's 960 is blurry in a headset. 0 = leave the game's.");
+            CameraDeviceDistance = Config.Bind("VR", "Camera Device Distance", 3f,
+                "How much farther away the camera is drawn, at the same apparent size (1 = as the game places it; too close to focus on in a headset).");
             ReticleAtTargetDepth = Config.Bind("VR", "Reticle At Target Depth", true,
                 "Draw the aiming dot at the distance of what you're looking at (same apparent size), so it doesn't double when you focus on something close.");
             EyeSeparationScale = Config.Bind("VR", "Eye Separation Scale", 0.6f,
@@ -215,6 +241,7 @@ namespace BYEFrameBlink
             TraceCsv = Config.Bind("Debug", "Trace Csv", false, "Write a per-frame CSV trace to BepInEx/BYEFrameBlink_trace.csv.");
             OverlayKey = Config.Bind("Debug", "Overlay Key", KeyCode.F8, "Toggle the debug overlay.");
             ForceBlinkKey = Config.Bind("Debug", "Force Blink Key", KeyCode.F9, "Hold to simulate closed eyes.");
+            FreezeKey = Config.Bind("Debug", "Freeze Key", KeyCode.F5, "Freeze/unfreeze the game without the pause menu (eyes treated as open while frozen). For inspecting scenes.");
             RecenterKey = Config.Bind("Debug", "Recenter Key", KeyCode.F6, "Make the direction you face straight ahead (and reset head position). Shift + this key toggles Recenter On Scene Start.");
 
             OscReceiver.Start(OscPort.Value);
@@ -222,6 +249,8 @@ namespace BYEFrameBlink
             var harmony = new Harmony(Guid);
             harmony.PatchAll(typeof(Plugin).Assembly);
             RenderedView.Install();
+            CameraDevice.Install();
+            ViewSync.Install();
             InputRedirect.PatchGameInputCalls(harmony);
             HeadTracking.TryPatchUuvr(harmony);
             StereoComfort.TryPatchUuvr(harmony);
@@ -240,6 +269,10 @@ namespace BYEFrameBlink
             else if (Input.GetKeyDown(RecenterKey.Value) || OscReceiver.ConsumeRecenterRequest()) HeadTracking.Recenter();
             if (Input.GetKeyDown(ReticleToggleKey.Value)) ToggleReticle();
             if (Input.GetKeyDown(EyeSeparationKey.Value)) StereoComfort.CycleEyeSeparation();
+            if (Input.GetKeyDown(FreezeKey.Value)) Freeze.Toggle();
+            Freeze.Update();
+            ParticleFacing.Update();
+            MenuRecenter.Update();
 
             DebugCommands.Update();
             SimHead.Update();

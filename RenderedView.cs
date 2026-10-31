@@ -17,7 +17,8 @@ namespace BYEFrameBlink
         private static int _frame = -10;
 
         public static Matrix4x4 MainView, MainProj, OverlayView, OverlayProj;
-        public static bool HasMain, HasOverlay;
+        public static Matrix4x4 UiView, UiProj;
+        public static bool HasMain, HasOverlay, HasUi;
 
         public static void Install()
         {
@@ -37,6 +38,7 @@ namespace BYEFrameBlink
                 HasOverlay = true;
                 return;
             }
+            if (left && c.name == "UI Camera" && c.transform.parent == Camera.main?.transform) { UiView = c.worldToCameraMatrix; UiProj = c.projectionMatrix; HasUi = true; return; }
             if (c != Camera.main) return;
             if (left)
             {

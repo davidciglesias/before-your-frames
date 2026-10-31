@@ -41,6 +41,20 @@ namespace BYEFrameBlink
         /// whose poses AutoPlay sets directly.
         /// </summary>
         private static Quaternion _yawOffset = Quaternion.identity;
+        /// <summary>Debug: turn the view by this yaw on top of the recenter offset (bye_sim yaw).</summary>
+        public static void AddYaw(float deg) { _yawOffset = Quaternion.Euler(0f, deg, 0f) * _yawOffset; Plugin.Log.LogInfo($"[cmd] yaw +{deg} -> {_yawOffset.eulerAngles.y:F0}"); }
+        /// <summary>Debug: turn the view center onto a named object (bye_sim lookat), on top of the recenter offset.</summary>
+        public static void LookAt(string name)
+        {
+            Camera main = Camera.main;
+            GameObject go = GameObject.Find(name);
+            if (main == null || go == null) { Plugin.Log.LogWarning($"[cmd] lookat: '{name}' not found"); return; }
+            Vector3 head = ChildCamera != null ? ChildCamera.position : main.transform.position;
+            Vector3 want = Quaternion.Inverse(main.transform.rotation) * (go.transform.position - head);
+            Vector3 now = InputTracking.GetLocalRotation(XRNode.Head) * Vector3.forward; // includes the current offset
+            _yawOffset = Quaternion.FromToRotation(now, want) * _yawOffset;
+            Plugin.Log.LogInfo($"[cmd] lookat '{name}' turned {Vector3.Angle(now, want):F1} deg");
+        }
 
         public static void PatchRecenter(Harmony harmony)
         {
@@ -174,6 +188,7 @@ namespace BYEFrameBlink
 
         private static bool GetLocalPositionPrefix(XRNode node, ref Vector3 __result)
         {
+            if (Freeze.Active && node == XRNode.Head) { __result = Freeze.HeldPosition; return false; }
             if (!Active || node != XRNode.Head) return true;
             __result = _pos;
             return false;
@@ -181,6 +196,7 @@ namespace BYEFrameBlink
 
         private static bool GetLocalRotationPrefix(XRNode node, ref Quaternion __result)
         {
+            if (Freeze.Active && node == XRNode.Head) { __result = Freeze.HeldRotation; return false; }
             if (!Active || node != XRNode.Head) return true;
             __result = Rotation;
             return false;

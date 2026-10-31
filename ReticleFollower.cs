@@ -17,6 +17,7 @@ namespace BYEFrameBlink
 
         private static Image _source;
         private static SpriteRenderer _copy;
+        public static Transform CopyTransform => _copy != null && _copy.enabled ? _copy.transform : null;
         private static float _nextSearch;
 
         /// <summary>Head-space direction the reticle is drawn at (for tests).</summary>

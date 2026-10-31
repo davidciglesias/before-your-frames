@@ -11,6 +11,7 @@ Test driver for BYEFrameBlink: sends fake eyelid / head-pose OSC to the plugin (
   bye_sim.ps1 lean               scripted lean test: +-0.2 m per axis, then yaw 90
   bye_sim.ps1 recenter
   bye_sim.ps1 shot [name]        save left-eye screenshot to BepInEx/BYEFrameBlink_shots/<name>.png
+  bye_sim.ps1 freeze [on|off]    freeze/unfreeze (same as F5); no arg toggles
   bye_sim.ps1 buttons            log active UI buttons to the BepInEx log
   bye_sim.ps1 click <label>      press a UI button by label
   bye_sim.ps1 invoke Type.Method call a parameterless game method
@@ -90,11 +91,18 @@ switch ($Cmd) {
     'overlayshot' { SendString '/bye/overlayshot' ($Rest -join ' ') }
     'followers' { SendString '/bye/followers' ($Rest -join ' ') }
     'buttons'  { SendString '/bye/buttons' '' }
+    'freeze'   { SendString '/bye/freeze' ($Rest -join ' ') }
+    'vfcheck'  { SendString '/bye/vfcheck' '' }
+    'viewsync' { SendString '/bye/viewsync' '' }
+    'lookat'   { SendString '/bye/lookat' ($Rest -join ' ') }
+    'yaw'      { SendString '/bye/yaw' ($Rest -join ' ') }
     'scenes'   { SendString '/bye/scenes' '' }
     'addrs'    { SendString '/bye/addrs' '' }
     'graphics' { SendString '/bye/graphics' ($Rest -join ' ') }
     'veiltest' { SendString '/bye/veiltest' '' }
     'goto'     { SendString '/bye/goto' ($Rest -join ' ') }
+    'toast'    { SendString '/bye/toast' ($Rest -join ' ') }
+    'renderers' { SendString '/bye/renderers' ($Rest -join ' ') }
     'fields'   { SendString '/bye/fields' ($Rest -join ' ') }
     'rayall'   { SendString '/bye/rayall' '' }
     'ias'      { SendString '/bye/ias' '' }

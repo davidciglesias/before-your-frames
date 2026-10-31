@@ -66,7 +66,38 @@ namespace BYEFrameBlink
             }
             return true;
         }
+        private static Matrix4x4 _mainLeft, _mainRight;
+        private static int _mainLeftFrame = -10, _mainRightFrame = -10;
+
         private static void UpdateRelativeMatrixPostfix(object __instance)
+        {
+            ApplyEyeSeparation(__instance);
+            SyncUiCamera(__instance);
+        }
+
+        /// <summary>
+        /// The game's UI Camera (it draws e.g. the camera device's viewfinder) gets its own head pose from UUVR, which on
+        /// a Steam Frame lands several degrees off the main camera's, so its overlays sat beside what they frame. Draw it
+        /// with exactly the main camera's view for the same eye (the main camera renders first: lower depth).
+        /// </summary>
+        private static void SyncUiCamera(object instance)
+        {
+            Camera parent = _parentCamera(instance);
+            Camera main = Camera.main;
+            if (parent == null || main == null || !parent.stereoEnabled) return;
+            bool left = parent.stereoActiveEye == Camera.MonoOrStereoscopicEye.Left;
+            if (parent == main)
+            {
+                if (left) { _mainLeft = main.worldToCameraMatrix; _mainLeftFrame = Time.frameCount; }
+                else { _mainRight = main.worldToCameraMatrix; _mainRightFrame = Time.frameCount; }
+                return;
+            }
+            if (!Plugin.SyncUiCamera.Value || parent.name != "UI Camera" || parent.transform.parent != main.transform) return;
+            if ((left ? _mainLeftFrame : _mainRightFrame) != Time.frameCount) return;
+            parent.worldToCameraMatrix = left ? _mainLeft : _mainRight;
+        }
+
+        private static void ApplyEyeSeparation(object __instance)
         {
             float k = Mathf.Clamp(Plugin.EyeSeparationScale.Value, 0.05f, 2f);
             if (Mathf.Abs(k - 1f) < 0.001f) return;

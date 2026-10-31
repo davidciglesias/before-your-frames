@@ -147,6 +147,29 @@ namespace BYEFrameBlink
         /// What the left eye sees, edge to edge: the world camera with that eye's last view/projection (post-processing
         /// included), then UUVR's overlay camera (UI panel, eyelids, vignette, reticle) on top with its own.
         /// </summary>
+        /// <summary>Where the camera device's viewfinder, the aiming dot and the aim ray land in the left eye's rendered view (degrees from view center).</summary>
+        private static void ViewfinderCheck()
+        {
+            string Deg(Matrix4x4 view, Matrix4x4 proj, Vector3 world)
+            {
+                Vector3 v = view.MultiplyPoint(world); // view space looks down -z
+                if (v.z >= 0f) return "behind";
+                float x = Mathf.Atan2(v.x, -v.z) * Mathf.Rad2Deg, y = Mathf.Atan2(v.y, -v.z) * Mathf.Rad2Deg;
+                return $"({x:F1}, {y:F1})";
+            }
+            var dev = UnityEngine.Object.FindObjectOfType<InteractableCamera>();
+            Renderer vf = dev != null ? dev.transform.Find("Overlay1/Overlay2")?.GetComponent<Renderer>() : null;
+            Transform dot = ReticleFollower.CopyTransform;
+            Ray ray = Gaze.LastGazeRay;
+            string s = "[cmd] vfcheck deg right/up in left eye:";
+            if (RenderedView.HasMain) s += " ray(main)=" + Deg(RenderedView.MainView, RenderedView.MainProj, ray.origin + ray.direction * 5f);
+            if (dot != null && RenderedView.HasOverlay) s += " dot(overlay)=" + Deg(RenderedView.OverlayView, RenderedView.OverlayProj, dot.position);
+            if (vf != null && RenderedView.HasUi) s += " viewfinder(ui)=" + Deg(RenderedView.UiView, RenderedView.UiProj, vf.bounds.center);
+            if (vf != null && RenderedView.HasMain) s += " viewfinder(as main)=" + Deg(RenderedView.MainView, RenderedView.MainProj, vf.bounds.center);
+            if (dev != null && RenderedView.HasMain) s += " deviceFwd(main)=" + Deg(RenderedView.MainView, RenderedView.MainProj, dev.transform.position + dev.transform.forward * 5f);
+            Plugin.Log.LogInfo(s);
+        }
+
         private static void EyeShot(string name)
         {
             Camera main = Camera.main, overlay = UiOverlay.Camera;
@@ -212,15 +235,30 @@ namespace BYEFrameBlink
             {
                 if (!t.gameObject.scene.IsValid() || t.name != name) continue;
                 foreach (Camera c in t.GetComponents<Camera>()) { c.enabled = on; n++; }
-                foreach (Renderer r in t.GetComponents<Renderer>()) { r.enabled = on; n++; }
+                foreach (Renderer r in t.GetComponentsInChildren<Renderer>(true)) { r.enabled = on; n++; }
+                foreach (Light l in t.GetComponentsInChildren<Light>(true)) { l.enabled = on; n++; }
             }
             Plugin.Log.LogInfo($"[cmd] toggle '{name}' {(on ? "on" : "off")}: {n} component(s)");
+        }
+
+        /// <summary>Lists the enabled renderers under every object with this name: path, bounds and materials.</summary>
+        private static void Renderers(string name)
+        {
+            foreach (Transform t in Resources.FindObjectsOfTypeAll<Transform>())
+            {
+                if (!t.gameObject.scene.IsValid() || t.name != name || !t.gameObject.activeInHierarchy) continue;
+                foreach (Renderer r in t.GetComponentsInChildren<Renderer>())
+                    Plugin.Log.LogInfo($"[cmd] renderer {PathOf(r.transform)} enabled={r.enabled} layer={r.gameObject.layer} bounds={r.bounds.min:F1}..{r.bounds.max:F1} " +
+                                       $"materials={string.Join(",", r.sharedMaterials.Select(m => m == null ? "-" : m.name + "/" + m.shader.name).ToArray())}");
+            }
         }
 
         private static void Run(string address, string arg)
         {
             switch (address)
             {
+                case "/bye/toast": Toast.Show(arg); break;
+                case "/bye/freeze": if (arg == "on" ? !Freeze.Active : arg == "off" ? Freeze.Active : true) Freeze.Toggle(); break;
                 case "/bye/shot": Screenshot(arg); break;
                 case "/bye/overlayshot": OverlayShot(arg); break;
                 case "/bye/followers": Followers(arg); break;
@@ -234,7 +272,12 @@ namespace BYEFrameBlink
                 case "/bye/gfx": Gfx(arg); break;
                 case "/bye/viewlayers": ViewLayers(); break;
                 case "/bye/toggle": Toggle(arg); break;
+                case "/bye/renderers": Renderers(arg); break;
                 case "/bye/eyeshot": EyeShot(arg); break;
+                case "/bye/vfcheck": ViewfinderCheck(); break;
+                case "/bye/viewsync": ViewSync.LogNext = true; break;
+                case "/bye/lookat": HeadTracking.LookAt(arg); break;
+                case "/bye/yaw": HeadTracking.AddYaw(float.Parse(arg, System.Globalization.CultureInfo.InvariantCulture)); break;
                 case "/bye/pp":
                 {
                     // "/bye/pp ambientOcclusion off": toggle one post-processing model on the current profile.
@@ -304,9 +347,23 @@ namespace BYEFrameBlink
                     // "prev" / "next": relative to the scene being played, so a scene can be replayed without naming it.
                     int idx = arg == "prev" ? gm._currentSceneId - 1 : arg == "next" ? gm._currentSceneId + 1 : -1;
                     if (arg.StartsWith("#") && int.TryParse(arg.Substring(1), out int n)) idx = n; // by sequence index
+                    // "ch3.5": chapter 3, 5th scene of it (counted from the chapter's first scene in the chapter select).
+                    var chapters = PlayerSaveData.Instance != null && PlayerSaveData.Instance.chapterScenes != null ? PlayerSaveData.Instance.chapterScenes._scenePrefabs : null;
+                    if (arg.StartsWith("ch") && chapters != null)
+                    {
+                        string[] parts = arg.Substring(2).Split('.');
+                        if (int.TryParse(parts[0], out int ch) && ch >= 1 && ch <= chapters.Count)
+                        {
+                            int start = seq.IndexOf(chapters[ch - 1]);
+                            int within = parts.Length > 1 && int.TryParse(parts[1], out int w) ? w : 1;
+                            if (start >= 0) idx = start + within - 1;
+                        }
+                    }
                     if (arg == "list")
                     {
                         for (int i = 0; i < seq.Count; i++) Plugin.Log.LogInfo($"[cmd] sequence #{i} {seq[i]}{(i == gm._currentSceneId ? "  <- current" : "")}");
+                        if (chapters != null)
+                            for (int c = 0; c < chapters.Count; c++) Plugin.Log.LogInfo($"[cmd] chapter {c + 1} starts at #{seq.IndexOf(chapters[c])}");
                         break;
                     }
                     if (idx < 0) idx = seq.FindIndex(n => string.Equals(n, arg, StringComparison.OrdinalIgnoreCase));
@@ -603,7 +660,24 @@ namespace BYEFrameBlink
             if (main != null)
                 Plugin.Log.LogInfo($"[cmd]   Camera.main={main.name} pos={main.transform.position:F3} fov={main.fieldOfView:F1} dist={Vector3.Distance(main.transform.position, t.position):F3}");
             foreach (Component c in t.GetComponents<Component>())
+            {
                 Plugin.Log.LogInfo($"[cmd]   component {c.GetType().FullName}");
+                if (c is ParticleSystem ps)
+                {
+                    var m = ps.main; var sh = ps.shape;
+                    Plugin.Log.LogInfo($"[cmd]     particles sim={m.simulationSpace} scaling={m.scalingMode} count={ps.particleCount}/{m.maxParticles} size={m.startSize.constant:F1}({m.startSize.constantMin:F1}..{m.startSize.constantMax:F1}) speed={m.startSpeed.constant:F2} life={m.startLifetime.constant:F1} shape={sh.shapeType} radius={sh.radius:F1} customSimSpace={(m.customSimulationSpace != null ? m.customSimulationSpace.name : "-")}");
+                    var ps2 = new ParticleSystem.Particle[Mathf.Min(ps.particleCount, 5)];
+                    int n2 = ps.GetParticles(ps2);
+                    for (int i = 0; i < n2; i++) Plugin.Log.LogInfo($"[cmd]       p{i} pos={ps2[i].position:F1} size={ps2[i].GetCurrentSize(ps):F1}");
+                }
+                if (c is SpriteRenderer sr)
+                    Plugin.Log.LogInfo($"[cmd]     sprite={(sr.sprite != null ? sr.sprite.name : "-")} tex={(sr.sprite != null ? sr.sprite.texture.name + " " + sr.sprite.texture.width + "x" + sr.sprite.texture.height + " filter=" + sr.sprite.texture.filterMode : "-")} rect={(sr.sprite != null ? sr.sprite.rect.size.ToString() : "-")} ppu={(sr.sprite != null ? sr.sprite.pixelsPerUnit : 0)} matTex={(sr.sharedMaterial != null && sr.sharedMaterial.mainTexture != null ? sr.sharedMaterial.mainTexture.name : "-")}");
+                if (c is ParticleSystemRenderer pr)
+                    Plugin.Log.LogInfo($"[cmd]     renderer mode={pr.renderMode} align={pr.alignment} minSize={pr.minParticleSize} maxSize={pr.maxParticleSize} sort={pr.sortMode} mat={(pr.sharedMaterial != null ? pr.sharedMaterial.shader.name : "-")}");
+                if (c is Light li)
+                    Plugin.Log.LogInfo($"[cmd]     light type={li.type} enabled={li.enabled} color={li.color} intensity={li.intensity} range={li.range} spot={li.spotAngle} " +
+                        $"cookie={(li.cookie != null ? li.cookie.name : "-")} cookieSize={li.cookieSize} shadows={li.shadows} renderMode={li.renderMode} cullingMask={li.cullingMask} bake={li.bakingOutput.lightmapBakeType}");
+            }
         }
 
         /// <summary>

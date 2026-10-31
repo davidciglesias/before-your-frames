@@ -37,6 +37,10 @@ namespace BYEFrameBlink
         private static float _nextScan;
 
         public static bool IsOpen => _open != null;
+
+        /// <summary>One of our own settings rows (laid out by us, from the spacing of the menu's buttons).</summary>
+        public static bool IsRow(Selectable s) =>
+            (_main != null && _main.Rows.Any(r => r.Button == s)) || (_pause != null && _pause.Rows.Any(r => r.Button == s));
         public static int Entries => (_main?.Entry != null ? 1 : 0) + (_pause?.Entry != null ? 1 : 0);
         public static int OpenRows => _open == null ? 0 : _open.Rows.Count(r => r.Button != null && r.Button.gameObject.activeInHierarchy);
 
@@ -113,14 +117,30 @@ namespace BYEFrameBlink
             return gaps[gaps.Count / 2];
         }
 
+        /// <summary>
+        /// The rows' spacing: the game's, times Menu Spacing (easier to pick by gaze), but only as far as keeps the
+        /// last row on the menu: there are 10 rows, and at full spacing the last one fell off the bottom edge.
+        /// </summary>
+        // 10 rows only just fit at the game's spacing, so spread them gently and centre the block where it was.
+        private static float SpreadStep(Context c, RectTransform topRow, float step, int rows)
+        {
+            float k = Mathf.Clamp(Plugin.MenuSpacing.Value, 1f, 1.2f);
+            if (!UnityEngine.XR.XRSettings.enabled || rows < 2) return step;
+            return step * k;
+        }
         private static void Open(Context c)
         {
             if (_open != null) return;
+            MenuSpread.RestoreAll(); // lay our rows out from the game's own spacing
             List<RectTransform> column = Column(c);
             column.Add((RectTransform)c.Entry.transform);
             column = column.OrderByDescending(r => r.anchoredPosition.y).ToList();
             float step = Step(column);
             Vector2 top = column.Count > 0 ? column[0].anchoredPosition : ((RectTransform)c.Template.transform).anchoredPosition;
+            if (c.Rows.Count == 0) BuildRows(c);
+            float spread = SpreadStep(c, null, step, c.Rows.Count);
+            top -= new Vector2(0f, (spread - step) * (c.Rows.Count - 1) * 0.5f);
+            step = spread;
 
             if (c.Rows.Count == 0) BuildRows(c);
             c.Hidden.Clear();
