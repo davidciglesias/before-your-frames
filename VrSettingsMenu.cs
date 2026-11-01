@@ -117,17 +117,6 @@ namespace BYEFrameBlink
             return gaps[gaps.Count / 2];
         }
 
-        /// <summary>
-        /// The rows' spacing: the game's, times Menu Spacing (easier to pick by gaze), but only as far as keeps the
-        /// last row on the menu: there are 10 rows, and at full spacing the last one fell off the bottom edge.
-        /// </summary>
-        // 10 rows only just fit at the game's spacing, so spread them gently and centre the block where it was.
-        private static float SpreadStep(Context c, RectTransform topRow, float step, int rows)
-        {
-            float k = Mathf.Clamp(Plugin.MenuSpacing.Value, 1f, 1.2f);
-            if (!UnityEngine.XR.XRSettings.enabled || rows < 2) return step;
-            return step * k;
-        }
         private static void Open(Context c)
         {
             if (_open != null) return;
@@ -138,11 +127,23 @@ namespace BYEFrameBlink
             float step = Step(column);
             Vector2 top = column.Count > 0 ? column[0].anchoredPosition : ((RectTransform)c.Template.transform).anchoredPosition;
             if (c.Rows.Count == 0) BuildRows(c);
-            float spread = SpreadStep(c, null, step, c.Rows.Count);
-            top -= new Vector2(0f, (spread - step) * (c.Rows.Count - 1) * 0.5f);
-            step = spread;
+            // Two columns, so the options get the same roomy spacing as the other menus (one column of all of them
+            // ran off the menu), and back sits on its own below them like the game's back buttons.
+            if (UnityEngine.XR.XRSettings.enabled) step *= Mathf.Clamp(Plugin.MenuSpacing.Value, 1f, 2.5f);
+            int options = c.Rows.Count - 1, perColumn = (options + 1) / 2;
+            float width = Mathf.Max(((RectTransform)c.Template.transform).rect.width, 200f);
+            // Second column's text starts a margin after the first column's widest text ends. Spans account for the
+            // labels' alignment: the main menu's are left-aligned, the pause menu's centred.
+            for (int i = 0; i < options; i++) SetLabel(c.Rows[i], c.Rows[i].Label());
+            float firstRight = float.MinValue, secondLeft = float.MaxValue;
+            for (int i = 0; i < options; i++)
+            {
+                Vector2 span = TextSpan(c.Rows[i]);
+                if (i < perColumn) firstRight = Mathf.Max(firstRight, span.y);
+                else secondLeft = Mathf.Min(secondLeft, span.x);
+            }
+            float dx = firstRight > float.MinValue && secondLeft < float.MaxValue ? firstRight - secondLeft + ColumnMargin : width;
 
-            if (c.Rows.Count == 0) BuildRows(c);
             c.Hidden.Clear();
             foreach (RectTransform r in column)
             {
@@ -153,13 +154,73 @@ namespace BYEFrameBlink
             for (int i = 0; i < c.Rows.Count; i++)
             {
                 Row row = c.Rows[i];
-                ((RectTransform)row.Button.transform).anchoredPosition = top + new Vector2(0f, step * i);
+                Vector2 at = i == options
+                    ? top + new Vector2(0f, step * (perColumn + 0.5f))
+                    : top + new Vector2(i < perColumn ? 0f : dx, step * (i % perColumn));
+                ((RectTransform)row.Button.transform).anchoredPosition = at;
                 SetLabel(row, row.Label());
                 row.Button.gameObject.SetActive(true);
             }
+            KeepOnCanvas(c, perColumn, options);
             if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(null);
             _open = c;
-            Plugin.Log.LogInfo("VR settings opened.");
+            Plugin.Log.LogInfo($"VR settings opened ({perColumn} rows per column, second column at +{dx:F0}).");
+        }
+
+        /// <summary>Gap between the first column's widest text and the second column, in canvas units.</summary>
+        private const float ColumnMargin = 60f;
+
+        /// <summary>
+        /// Menus sit at different places on their canvas (the pause menu further right), so the page can run past an
+        /// edge: measure all text against the canvas and slide the rows back inside.
+        /// </summary>
+        private static void KeepOnCanvas(Context c, int perColumn, int options)
+        {
+            Canvas canvas = c.Host.GetComponentInParent<Canvas>();
+            if (canvas == null) return;
+            var root = (RectTransform)canvas.rootCanvas.transform;
+            Transform parent = c.Rows[0].Button.transform.parent;
+            float min = float.MaxValue, max = float.MinValue;
+            for (int i = 0; i < c.Rows.Count; i++)
+            {
+                var rt = (RectTransform)c.Rows[i].Button.transform;
+                Vector2 span = TextSpan(c.Rows[i]);
+                min = Mathf.Min(min, root.InverseTransformPoint(rt.TransformPoint(new Vector3(span.x, 0f, 0f))).x);
+                max = Mathf.Max(max, root.InverseTransformPoint(rt.TransformPoint(new Vector3(span.y, 0f, 0f))).x);
+            }
+            float lo = root.rect.xMin + ColumnMargin, hi = root.rect.xMax - ColumnMargin, shift = 0f;
+            if (max > hi) shift = hi - max;
+            if (min + shift < lo) shift = lo - min;
+            if (Mathf.Abs(shift) < 0.5f) return;
+            float local = shift * root.lossyScale.x / Mathf.Max(1e-5f, parent.lossyScale.x);
+            foreach (Row r in c.Rows) ((RectTransform)r.Button.transform).anchoredPosition += new Vector2(local, 0f);
+            Plugin.Log.LogInfo($"VR settings moved {local:F0} to stay on the menu.");
+        }
+
+        private static float TextWidth(Row r) =>
+            r.Tmp != null ? r.Tmp.preferredWidth : r.Text != null ? r.Text.preferredWidth : 0f;
+
+        /// <summary>Left and right of a row's visible text, in its button's local x.</summary>
+        private static Vector2 TextSpan(Row r)
+        {
+            var button = (RectTransform)r.Button.transform;
+            RectTransform tr = r.Tmp != null ? r.Tmp.rectTransform : r.Text != null ? r.Text.rectTransform : button;
+            float a = 0f;
+            if (r.Tmp != null)
+            {
+                string h = r.Tmp.alignment.ToString(); // older TMP: one enum, e.g. TopLeft, Center, MidlineRight
+                a = h.EndsWith("Right") ? 1f : h.EndsWith("Left") ? 0f : 0.5f;
+            }
+            else if (r.Text != null)
+            {
+                int col = (int)r.Text.alignment % 3; // UpperLeft, UpperCenter, UpperRight, MiddleLeft, ...
+                a = col * 0.5f;
+            }
+            float w = Mathf.Min(TextWidth(r), tr.rect.width);
+            float left = tr.rect.xMin + a * (tr.rect.width - w);
+            float l = button.InverseTransformPoint(tr.TransformPoint(new Vector3(left, 0f, 0f))).x;
+            float rr = button.InverseTransformPoint(tr.TransformPoint(new Vector3(left + w, 0f, 0f))).x;
+            return new Vector2(l, rr);
         }
 
         private static void Close(bool restore)
@@ -182,10 +243,9 @@ namespace BYEFrameBlink
             AddRow(c, "VR Aiming Dot Button", () => "aiming dot: " + OnOff(Plugin.ShowReticle.Value), Plugin.ToggleReticle);
             AddRow(c, "VR Recenter Start Button", () => "recenter each scene: " + OnOff(Plugin.RecenterOnSceneStart.Value), Plugin.ToggleRecenterOnSceneStart);
             AddRow(c, "VR Recenter Button", () => "recenter view now", () => HeadTracking.Recenter());
-            AddRow(c, "VR Head Movement Button", () => "head movement: " + OnOff(Plugin.PositionalTracking.Value), Plugin.TogglePositionalTracking);
             AddRow(c, "VR Render Quality Button", () => "render quality (in game): " + RenderScale.Label, RenderScale.Cycle);
             AddRow(c, "VR Performance Button", () => "performance mode: " + Performance.Label, Performance.Cycle);
-            AddRow(c, "VR Vignette Button", () => "vignette: " + Plugin.VignetteLabel, Plugin.CycleVignette);
+            AddRow(c, "VR Auto Resolution Button", () => "auto resolution: " + AutoResolution.Label, AutoResolution.Cycle);
             AddRow(c, "VR Back Button", () => "back", () => Close(true), true);
         }
 

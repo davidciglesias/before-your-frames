@@ -11,7 +11,7 @@ namespace BYEFrameBlink
     public class Plugin : BaseUnityPlugin
     {
         public const string Guid = "byeframeblink";
-        public const string Version = "0.5.0";
+        public const string Version = "0.5.1";
 
         internal static ManualLogSource Log;
         internal static Plugin Instance;
@@ -179,14 +179,14 @@ namespace BYEFrameBlink
             MenuRenderScale = Config.Bind("VR", "Menu Render Scale", 1.5f,
                 "Render scale in the main menu, whose wide scenery looks low-res at SteamVR's resolution. It's cheap to draw, so it can be higher than Render Scale.");
             Performance = Config.Bind("VR", "Performance Mode", PerformanceMode.Auto,
-                "For running the game on the headset itself (Proton on a Steam Frame): Performance MSAA, medium shadows, no ambient occlusion, bloom, grain or FXAA, render quality steps 80/100/125%, and Menu Render Scale ignored. Auto = on under Proton/Wine, off on Windows.");
+                "For running the game on the headset itself (Proton on a Steam Frame): Performance MSAA, medium shadows, no ambient occlusion, bloom, grain or FXAA, render quality steps 80/100/120%, menus at 100% or more. Auto = on under Proton/Wine, off on Windows.");
             PerformanceMsaa = Config.Bind("VR", "Performance MSAA", 2,
                 "Anti-aliasing samples (0, 2, 4 or 8) in performance mode. Smooths jagged edges; 2 keeps a steady frame rate on a Steam Frame, 4 costs about 4 ms more per frame.");
             PerformanceHdr = Config.Bind("VR", "Performance HDR", false,
                 "Keep HDR rendering in performance mode. Off by default: with MSAA it is the biggest GPU cost on the headset itself (the head tracking shakes when frames are missed).");
             AutoResolution = Config.Bind("VR", "Auto Resolution", AutoResolutionMode.Auto,
                 "Lower the render resolution a little in heavy moments so no frame is missed (a missed frame makes the view shake), and raise it again when there's headroom. Auto = on in performance mode; On also helps on PCs with slower GPUs.");
-            AutoResolutionMin = Config.Bind("VR", "Auto Resolution Min", 0.6f,
+            AutoResolutionMin = Config.Bind("VR", "Auto Resolution Min", 0.8f,
                 "The lowest fraction of Render Scale that Auto Resolution may drop to.");
             RevealSphereScale = Config.Bind("VR", "Reveal Sphere Scale", 1f,
                 "Enlarges the spheres some scenes use to change the room's look (e.g. to night), which are sized for a flat screen and show their edges in a headset's wider view. 1 = as the game sets them.");

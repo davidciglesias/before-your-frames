@@ -40,7 +40,16 @@ namespace BYEFrameBlink
         }
 
         /// <summary>Multiplier on Render Scale (1 = no reduction).</summary>
-        public static float Factor => Active ? _factor : 1f;
+        // Menus stay at full resolution so their text is readable; they are mostly still, so a missed frame there
+        // matters far less than in play.
+        public static float Factor => Active && !MenuGaze.Active ? _factor : 1f;
+
+        public static void Cycle()
+        {
+            Plugin.AutoResolution.Value = Plugin.AutoResolution.Value == AutoResolutionMode.Auto ? AutoResolutionMode.On
+                : Plugin.AutoResolution.Value == AutoResolutionMode.On ? AutoResolutionMode.Off : AutoResolutionMode.Auto;
+            Toast.Show("Auto resolution: " + Label);
+        }
 
         public static string Label => Plugin.AutoResolution.Value == AutoResolutionMode.Auto
             ? "auto (" + (Active ? "on" : "off") + ")"

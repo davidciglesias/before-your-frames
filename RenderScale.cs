@@ -12,7 +12,7 @@ namespace BYEFrameBlink
     internal static class RenderScale
     {
         public static readonly float[] DesktopPresets = { 1f, 1.25f, 1.5f, 1.75f };
-        public static readonly float[] LowPowerPresets = { 0.8f, 1f, 1.25f };
+        public static readonly float[] LowPowerPresets = { 0.8f, 1f, 1.2f };
 
         public static float[] Presets => Performance.Active ? LowPowerPresets : DesktopPresets;
 
@@ -23,6 +23,7 @@ namespace BYEFrameBlink
                 float s = Plugin.RenderScale.Value;
                 MainMenuController mmc = MainMenuController.Instance;
                 if (!Performance.Active && mmc != null && mmc.isActiveAndEnabled) s = Mathf.Max(s, Plugin.MenuRenderScale.Value);
+                if (MenuGaze.Active) s = Mathf.Max(s, 1f); // menus never below 100%, so their text stays readable
                 return Mathf.Clamp(s * AutoResolution.Factor, 0.25f, 2f);
             }
         }

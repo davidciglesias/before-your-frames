@@ -12,7 +12,7 @@ namespace BYEFrameBlink
     /// For running on the headset itself (Proton + FEX on the Steam Frame's mobile chip), where the game's
     /// desktop settings (8x MSAA, very high shadows with 4 cascades, ambient occlusion, bloom, grain) overheat it.
     /// Auto = on under Wine/Proton. When on: Performance MSAA (2x), no HDR, lighter shadows, no ambient occlusion/bloom/grain/FXAA,
-    /// render quality steps 80/100/125%, and Menu Render Scale ignored (the menu uses Render Scale too).
+    /// render quality steps 80/100/120%, and Menu Render Scale ignored (menus stay at 100% or more).
     /// </summary>
     internal static class Performance
     {
