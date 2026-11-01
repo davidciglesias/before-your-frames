@@ -11,7 +11,7 @@ namespace BYEFrameBlink
     public class Plugin : BaseUnityPlugin
     {
         public const string Guid = "byeframeblink";
-        public const string Version = "0.6.0";
+        public const string Version = "0.6.1";
 
         internal static ManualLogSource Log;
         internal static Plugin Instance;
@@ -184,7 +184,7 @@ namespace BYEFrameBlink
                 "For running the game on the headset itself (Proton on a Steam Frame): Performance MSAA, medium shadows, no ambient occlusion, bloom, grain or FXAA, render quality steps 80/100/120%, menus at 100% or more. Auto = on under Proton/Wine, off on Windows.");
             PerformanceMsaa = Config.Bind("VR", "Performance MSAA", 2,
                 "Anti-aliasing samples (0, 2, 4 or 8) in performance mode. Smooths jagged edges; 2 keeps a steady frame rate on a Steam Frame, 4 costs about 4 ms more per frame.");
-            GazeMenuOpener = Config.Bind("VR", "Gaze Menu Opener", true, "During play, tilt your head well down and a \"menu\" label appears below, fixed in the world: point your head at it and close your eyes for a moment to open the pause menu (no controller needed). Blinks while it's lit don't reach the game.");
+            GazeMenuOpener = Config.Bind("VR", "Gaze Menu Opener", true, "During play, turn your head down to the left and a \"menu\" label appears there, fixed in the world: point your head at it and close your eyes for a moment to open the pause menu (no controller needed). Blinks while it's lit don't reach the game.");
             PerformanceReflections = Config.Bind("VR", "Performance Reflections", ReflectionMode.Off, "In performance mode: whether the game's live reflections (water, shiny floors) keep updating. On a Steam Frame they are the heaviest thing in some scenes (12 ms, half frame rate, against 9 ms and full rate without). Off = they keep their last image; Full = as the game does.");
             PerformanceHdr = Config.Bind("VR", "Performance HDR", false,
                 "Keep HDR rendering in performance mode. Off by default: with MSAA it is the biggest GPU cost on the headset itself (the head tracking shakes when frames are missed).");

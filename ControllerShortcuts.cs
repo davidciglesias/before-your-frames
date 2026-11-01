@@ -141,18 +141,26 @@ namespace BYEFrameBlink
         private static float _toggledAt = -10f, _pauseKeyAt = -10f;
 
         /// <summary>True shortly after a controller toggled the pause menu: the game should ignore Escape/P then.</summary>
-        public static bool JustToggled => Time.unscaledTime - _toggledAt < 0.4f;
+        public static bool JustToggled => Time.unscaledTime - _toggledAt < DedupeSeconds;
+
+        // Steam Input's Escape can trail the controller press (more when streaming), so allow a generous window.
+        private const float DedupeSeconds = 1f;
 
         /// <summary>Called every frame: remembers when the game itself saw Escape/P, so our toggle doesn't undo it.</summary>
         public static void TrackPauseKeys()
         {
-            if (!JustToggled && (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.P))) _pauseKeyAt = Time.unscaledTime;
+            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.P))
+            {
+                if (JustToggled) { Plugin.Log.LogInfo("Escape after a controller menu press: ignored by the game."); return; }
+                _pauseKeyAt = Time.unscaledTime;
+            }
         }
 
         private static void TogglePauseMenu()
         {
-            if (Time.unscaledTime - _pauseKeyAt < 0.4f) return; // the game already handled this press as Escape
+            if (Time.unscaledTime - _pauseKeyAt < DedupeSeconds) { Plugin.Log.LogInfo("Controller menu press skipped: the game already handled it as Escape."); return; }
             _toggledAt = Time.unscaledTime;
+            Plugin.Log.LogInfo("Controller menu press: toggling the pause menu.");
             if (VrSettingsMenu.Back()) return;
             PauseMenuController pmc = PauseMenuController.instance;
             if (pmc == null) return;

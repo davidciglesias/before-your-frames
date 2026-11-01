@@ -167,6 +167,36 @@ namespace BYEFrameBlink
         private static readonly string[] WaterScreenProps = { "_EdgeBlend", "_LightAbs" };
         private static readonly Dictionary<Material, float[]> WaterOriginals = new Dictionary<Material, float[]>();
         private static float _nextWaterScan;
+        private static float _waterRefreshAt = -1f, _lastEyeScale = -1f;
+        private static readonly HashSet<int> SeenWater = new HashSet<int>();
+        private static bool Log(string s) { Plugin.Log.LogInfo(s); return true; }
+
+        /// <summary>
+        /// On the Steam Frame the water's reflection images could come out purple for a whole scene (seen in one),
+        /// while turning its reflections off and on again (fresh images) fixed it. So do that a moment after a new
+        /// piece of water appears and after the eye resolution changes (auto resolution).
+        /// </summary>
+        private static void RefreshWaterIfStale()
+        {
+            // Water that wasn't there before (scenes switch theirs on after loading, not only at load).
+            foreach (LPWAsset.LPWReflection refl in UnityEngine.Object.FindObjectsOfType<LPWAsset.LPWReflection>())
+                if (refl != null && refl.enabled && SeenWater.Add(refl.GetInstanceID()) && _waterRefreshAt < 0f && Log("New water: " + refl.name))
+                    _waterRefreshAt = Time.unscaledTime + 1.5f;
+            float scale = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
+            if (_lastEyeScale >= 0f && Mathf.Abs(scale - _lastEyeScale) > 1e-3f && _waterRefreshAt < 0f) _waterRefreshAt = Time.unscaledTime + 1f;
+            _lastEyeScale = scale;
+            if (_waterRefreshAt < 0f || Time.unscaledTime < _waterRefreshAt) return;
+            _waterRefreshAt = -1f;
+            int n = 0;
+            foreach (LPWAsset.LPWReflection refl in UnityEngine.Object.FindObjectsOfType<LPWAsset.LPWReflection>())
+            {
+                if (refl == null || !refl.enabled) continue;
+                refl.enabled = false; // drops its reflection images
+                refl.enabled = true;  // and makes new ones on the next render
+                n++;
+            }
+            if (n > 0) Plugin.Log.LogInfo($"Refreshed {n} water reflection(s).");
+        }
 
         public static int WaterMaterialsChanged
         {
@@ -188,6 +218,7 @@ namespace BYEFrameBlink
         {
             if (Time.unscaledTime < _nextWaterScan) return;
             _nextWaterScan = Time.unscaledTime + 0.5f;
+            RefreshWaterIfStale();
             bool[] off = { Plugin.DisableWaterEdgeBlend.Value, Plugin.DisableWaterLightAbsorption.Value };
             foreach (LPWAsset.LowPolyWaterScript water in UnityEngine.Object.FindObjectsOfType<LPWAsset.LowPolyWaterScript>())
             {

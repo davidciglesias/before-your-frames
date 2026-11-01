@@ -137,10 +137,10 @@ These are read through SteamVR's "legacy" controller buttons, the compatibility 
 
 ### Menus in VR
 
-- The main menu and chapter select are laid out in **two columns** with plenty of room between options, so they're easy to pick by gaze. Options about the webcam (calibration, camera feed, eye detection guide) are hidden, since the headset replaces it.
+- The main menu, the pause menu and chapter select are laid out in **two columns** with plenty of room between options, so they're easy to pick by gaze. Options about the webcam (calibration, camera feed, eye detection guide) are hidden, since the headset replaces it.
 - **subtitles** replaces the game's settings page: every subtitle language (and "no subtitles") is a button, and the menus follow the chosen language. Subtitles are drawn bigger and bold, with an outline, so they read well in the headset.
 - **vr settings**: eye tracking, world size, aiming dot, recentering, render quality, performance mode and auto resolution, all changeable with gaze + blink (or the controller). Changes are saved to the config file right away.
-- **Opening the menu without a controller:** during play, tilt your head well down. A "menu" label appears below you, fixed in the world. Point your head at it (it lights up) and close your eyes for half a second to open the pause menu. Blinks don't reach the game while it's lit, so the story can't move on by accident. `Gaze Menu Opener = false` turns this off.
+- **Opening the menu without a controller:** during play, turn your head down to the left. A "menu" label appears there, fixed in the world. Point your head at it (it lights up) and close your eyes for half a second to open the pause menu. Blinks don't reach the game while it's lit, so the story can't move on by accident. `Gaze Menu Opener = false` turns this off.
 
 ### Playing without eye tracking
 

@@ -31,11 +31,11 @@ namespace BYEFrameBlink
         private static string[] Current =>
             Words.TryGetValue(Subtitles.Current, out string[] w) ? w : Words["English"];
 
-        /// <summary>The game's English menu is all lowercase; its German/French/Spanish menus capitalize ("Reanudar").</summary>
+        /// <summary>The game's English and French menus are all lowercase; its German and Spanish menus capitalize ("Reanudar").</summary>
         public static string Cap(string s)
         {
             string lang = Subtitles.Current;
-            if (string.IsNullOrEmpty(s) || !(lang == "German" || lang == "French" || lang == "Spanish")) return s;
+            if (string.IsNullOrEmpty(s) || !(lang == "German" || lang == "Spanish")) return s;
             return char.ToUpper(s[0]) + s.Substring(1);
         }
 

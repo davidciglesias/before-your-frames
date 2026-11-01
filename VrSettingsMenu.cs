@@ -21,6 +21,23 @@ namespace BYEFrameBlink
             public Text Text;
             public TMPro.TMP_Text Tmp;
             public Func<string> Label;
+            public float BaseSize = -1f; // font size as built, before any shrinking to fit
+        }
+
+        /// <summary>Text at this fraction of its built size (long translations shrink to fit the view).</summary>
+        private static void SetTextScale(Row r, float f)
+        {
+            if (r.Text != null)
+            {
+                if (r.BaseSize < 0f) r.BaseSize = r.Text.fontSize;
+                int size = Mathf.Max(1, Mathf.RoundToInt(r.BaseSize * f));
+                if (r.Text.fontSize != size) r.Text.fontSize = size;
+            }
+            else if (r.Tmp != null)
+            {
+                if (r.BaseSize < 0f) r.BaseSize = r.Tmp.fontSize;
+                r.Tmp.fontSize = r.BaseSize * f;
+            }
         }
 
         private sealed class Context
@@ -100,6 +117,9 @@ namespace BYEFrameBlink
                                                && !b.name.StartsWith("VR ") && !b.name.StartsWith("BYE "));
             if (template == null) return;
 
+            // Measure the game's own layout, not our two-column spread of it (side by side, rows share a height, which
+            // read as no spacing and put our entry on top of another when the menu came back after a scene).
+            MenuSpread.RestoreAll();
             var c = new Context { Host = host, Template = template, Audio = FindAudio(template), IsSettings = settings };
             var t = (RectTransform)template.transform;
             if (settings)
@@ -138,7 +158,11 @@ namespace BYEFrameBlink
         private static float Step(List<RectTransform> column)
         {
             var gaps = new List<float>();
-            for (int i = 1; i < column.Count; i++) gaps.Add(column[i].anchoredPosition.y - column[i - 1].anchoredPosition.y);
+            for (int i = 1; i < column.Count; i++)
+            {
+                float g = column[i].anchoredPosition.y - column[i - 1].anchoredPosition.y;
+                if (Mathf.Abs(g) > 1f) gaps.Add(g); // buttons at one height (side by side) are no spacing
+            }
             if (gaps.Count == 0) return -40f;
             gaps.Sort();
             return gaps[gaps.Count / 2];
@@ -165,15 +189,17 @@ namespace BYEFrameBlink
             float width = Mathf.Max(((RectTransform)c.Template.transform).rect.width, 200f);
             // Second column's text starts a margin after the first column's widest text ends. Spans account for the
             // labels' alignment: the main menu's are left-aligned, the pause menu's centred.
-            for (int i = 0; i < options; i++) SetLabel(c.Rows[i], c.Rows[i].Label());
-            float firstRight = float.MinValue, secondLeft = float.MaxValue;
-            for (int i = 0; i < options; i++)
+            for (int i = 0; i < c.Rows.Count; i++) { SetLabel(c.Rows[i], c.Rows[i].Label()); SetTextScale(c.Rows[i], 1f); }
+            float dx = Measure(c, perColumn, options, width, out float total);
+            // Too wide for the comfortable middle of the view (long translations): shrink the text to fit.
+            float avail = UsableWidth(c);
+            if (avail > 0f && total > avail)
             {
-                Vector2 span = TextSpan(c.Rows[i]);
-                if (i < perColumn) firstRight = Mathf.Max(firstRight, span.y);
-                else secondLeft = Mathf.Min(secondLeft, span.x);
+                float f = Mathf.Max(0.6f, avail / total);
+                foreach (Row r in c.Rows) SetTextScale(r, f);
+                dx = Measure(c, perColumn, options, width, out total);
+                Plugin.Log.LogInfo($"VR settings text at {f:P0} to fit the view.");
             }
-            float dx = firstRight > float.MinValue && secondLeft < float.MaxValue ? firstRight - secondLeft + ColumnMargin : width;
 
             c.Hidden.Clear();
             foreach (RectTransform r in column)
@@ -201,6 +227,34 @@ namespace BYEFrameBlink
         /// <summary>Gap between the first column's widest text and the second column, in canvas units.</summary>
         private const float ColumnMargin = 100f;
 
+        /// <summary>The page stays out of this fraction of the canvas on each side: its edges are at the edge of the view.</summary>
+        private const float EdgeFraction = 0.1f;
+
+        /// <summary>The second column's offset; total = the two columns' text plus the gap, in the rows' local units.</summary>
+        private static float Measure(Context c, int perColumn, int options, float fallback, out float total)
+        {
+            float firstLeft = float.MaxValue, firstRight = float.MinValue, secondLeft = float.MaxValue, secondRight = float.MinValue;
+            for (int i = 0; i < options; i++)
+            {
+                Vector2 span = TextSpan(c.Rows[i]);
+                if (i < perColumn) { firstLeft = Mathf.Min(firstLeft, span.x); firstRight = Mathf.Max(firstRight, span.y); }
+                else { secondLeft = Mathf.Min(secondLeft, span.x); secondRight = Mathf.Max(secondRight, span.y); }
+            }
+            if (firstRight == float.MinValue || secondLeft == float.MaxValue) { total = 0f; return fallback; }
+            total = (firstRight - firstLeft) + ColumnMargin + (secondRight - secondLeft);
+            return firstRight - secondLeft + ColumnMargin;
+        }
+
+        /// <summary>The canvas width minus the edges to keep clear, in the rows' local units (0 if unknown).</summary>
+        private static float UsableWidth(Context c)
+        {
+            Canvas canvas = c.Host.GetComponentInParent<Canvas>();
+            if (canvas == null || c.Rows.Count == 0) return 0f;
+            var root = (RectTransform)canvas.rootCanvas.transform;
+            Transform parent = c.Rows[0].Button.transform.parent;
+            return root.rect.width * (1f - 2f * EdgeFraction) * root.lossyScale.x / Mathf.Max(1e-5f, parent.lossyScale.x);
+        }
+
         /// <summary>
         /// Menus sit at different places on their canvas (the pause menu further right), so the page can run past an
         /// edge: measure all text against the canvas and slide the rows back inside.
@@ -219,9 +273,11 @@ namespace BYEFrameBlink
                 min = Mathf.Min(min, root.InverseTransformPoint(rt.TransformPoint(new Vector3(span.x, 0f, 0f))).x);
                 max = Mathf.Max(max, root.InverseTransformPoint(rt.TransformPoint(new Vector3(span.y, 0f, 0f))).x);
             }
-            float lo = root.rect.xMin + ColumnMargin, hi = root.rect.xMax - ColumnMargin, shift = 0f;
-            if (max > hi) shift = hi - max;
-            if (min + shift < lo) shift = lo - min;
+            float edge = root.rect.width * EdgeFraction;
+            float lo = root.rect.xMin + edge, hi = root.rect.xMax - edge, shift = 0f;
+            if (max - min > hi - lo) shift = (lo + hi) * 0.5f - (min + max) * 0.5f; // still too wide: centre it
+            else if (max > hi) shift = hi - max;
+            else if (min < lo) shift = lo - min;
             if (Mathf.Abs(shift) < 0.5f) return;
             float local = shift * root.lossyScale.x / Mathf.Max(1e-5f, parent.lossyScale.x);
             foreach (Row r in c.Rows) ((RectTransform)r.Button.transform).anchoredPosition += new Vector2(local, 0f);

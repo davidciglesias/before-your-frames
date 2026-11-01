@@ -9,7 +9,7 @@ namespace BYEFrameBlink
     /// The game's menus stack their buttons closely, made for a mouse. Picking one by gaze is easier with more room
     /// between them, so while a menu is open in VR, restack the buttons of each vertical column downward from the
     /// top option (titles sit above) at the game's step times Menu Spacing, closing the gaps of options hidden in VR
-    /// (MenuDeclutter). The main menu goes into two columns, side by side. Everything is put back when the menu
+    /// (MenuDeclutter). The main menu, the pause menu and chapter select go into two columns, side by side. Everything is put back when the menu
     /// closes. Our own settings pages lay themselves out, so they're left alone.
     /// </summary>
     internal static class MenuSpread
@@ -19,17 +19,26 @@ namespace BYEFrameBlink
         private const float ColumnMargin = 60f;
         private static readonly Dictionary<RectTransform, Entry> Moved = new Dictionary<RectTransform, Entry>();
         private static float _nextScan;
+        private static int _lastCount = -1;
 
         public static void Update(bool menuActive)
         {
             float k = Mathf.Clamp(Plugin.MenuSpacing.Value, 1f, 2.5f);
             if (!menuActive || k <= 1.001f || VrSettingsMenu.IsOpen) { RestoreAll(); return; }
-            if (Time.unscaledTime < _nextScan) return;
-            _nextScan = Time.unscaledTime + 0.25f;
-
+            // Chapter select is re-laid out at once when it opens (its buttons appearing), so the game's own layout never
+            // shows for a moment; everything else a few times a second. Not the main menu at once: coming back from a
+            // scene, our entries are still being added there, and laying out mid-way put two on the same spot.
             MainMenuController mmc = MainMenuController.Instance;
+            int count = Selectable.allSelectables.Count;
+            bool chaptersOpen = mmc != null && mmc.chaptersMenu != null && mmc.chaptersMenu.activeInHierarchy;
+            if (Time.unscaledTime < _nextScan && !(chaptersOpen && count != _lastCount)) return;
+            _nextScan = Time.unscaledTime + 0.25f;
+            _lastCount = count;
+
             Transform mainMenu = mmc != null && mmc.mainMenu != null ? mmc.mainMenu.transform : null;
             Transform chapters = mmc != null && mmc.chaptersMenu != null ? mmc.chaptersMenu.transform : null;
+            PauseMenuController pmc = PauseMenuController.instance;
+            Transform pauseMenu = pmc != null && pmc.pauseMenu != null ? pmc.pauseMenu.transform : null;
             var buttons = Selectable.allSelectables
                 .Where(s => s != null && s.isActiveAndEnabled && s is Button && !VrSettingsMenu.IsRow(s) && s.transform.parent != null)
                 .Select(s => (RectTransform)s.transform);
@@ -59,12 +68,14 @@ namespace BYEFrameBlink
                 if (step <= 1f) continue;
                 Vector2 top = original[ordered[0]];
 
-                bool twoColumns = column.Key == mainMenu || chapterList;
+                // Main menu, pause menu and chapter select go in two columns, so their rows can be spread further apart.
+                bool twoColumns = column.Key == mainMenu || column.Key == pauseMenu || chapterList;
                 // A back button in the list (chapter select) goes on its own row below the columns.
                 RectTransform back = twoColumns ? ordered.FirstOrDefault(r => r.name.IndexOf("back", System.StringComparison.OrdinalIgnoreCase) >= 0) : null;
                 if (back != null) ordered.Remove(back);
                 int perColumn = twoColumns ? (ordered.Count + 1) / 2 : ordered.Count;
                 float dx = twoColumns ? ColumnOffset(ordered, perColumn) : 0f;
+                float x0 = top.x; // the first column stays where the menu had it (further left gets clipped in the pause menu)
                 // Two columns: spread the rows over the height the single column used (times Menu Spacing where it
                 // fits: the main menu has room; chapter select already filled the menu), so options are far apart.
                 float rowStep = step * k;
@@ -77,13 +88,13 @@ namespace BYEFrameBlink
                 for (int i = 0; i < ordered.Count; i++)
                 {
                     RectTransform r = ordered[i];
-                    Vector2 want = new Vector2(top.x + (i < perColumn ? 0f : dx), top.y - (i % perColumn) * rowStep);
+                    Vector2 want = new Vector2(x0 + (i < perColumn ? 0f : dx), top.y - (i % perColumn) * rowStep);
                     if ((r.anchoredPosition - want).sqrMagnitude > 1e-4f) r.anchoredPosition = want;
                     Moved[r] = new Entry { Original = original[r], Applied = want };
                 }
                 if (back != null)
                 {
-                    Vector2 want = new Vector2(top.x + dx * 0.5f, top.y - (perColumn - 1 + 1.5f) * rowStep);
+                    Vector2 want = new Vector2(x0 + dx * 0.5f, top.y - (perColumn - 1 + 1.5f) * rowStep);
                     if ((back.anchoredPosition - want).sqrMagnitude > 1e-4f) back.anchoredPosition = want;
                     Moved[back] = new Entry { Original = original[back], Applied = want };
                 }

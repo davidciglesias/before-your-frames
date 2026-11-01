@@ -11,7 +11,7 @@ namespace BYEFrameBlink
     /// </summary>
     internal static class RenderScale
     {
-        public static readonly float[] DesktopPresets = { 1f, 1.25f, 1.5f, 1.75f };
+        public static readonly float[] DesktopPresets = { 0.8f, 1f, 1.25f };
         public static readonly float[] LowPowerPresets = { 0.8f, 1f, 1.2f };
 
         public static float[] Presets => Performance.Active ? LowPowerPresets : DesktopPresets;
