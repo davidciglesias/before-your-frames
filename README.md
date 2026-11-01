@@ -6,7 +6,9 @@ Play **Before Your Eyes** in VR on a **Steam Frame**, with your real blinks and 
 
 - **Blinks** come from your eyelids. Holding your eyes shut works too, for the scenes that ask for it.
 - **Gaze aiming.** You select things by looking at them, not by pointing your head.
-- **Blink menus.** In the main and pause menus you look at a button and blink to press it.
+- **Blink menus.** In the main and pause menus you look at a button and blink to press it. The options are spread in two columns so they're easy to pick, and during play you can open the menu by looking down, no controller needed.
+- **Readable subtitles** in any of the game's languages, chosen from a simple page, plus menus in your language.
+- **Runs streamed from a PC or on the Steam Frame by itself.**
 - **Full-view eyelids and fades.** The game's eyelid animation and screen fades cover your whole field of view, not just a small panel.
 - **Head-locked reticle** that follows where you look (and can be hidden), and a small **aim assist** so tiny targets are easier to hit.
 - **Comfort options** for close-up scenes: smaller eye separation, no depth-of-field blur.
@@ -25,12 +27,43 @@ The eye data comes from frameeyeosc, an experimental tool that reads a private i
 
 ## What you need
 
-- A **Steam Frame**, with SteamVR on the PC and the game streamed through Steam Link
-- **Before Your Eyes** on Steam (Windows)
-- [**Rai Pal**](https://github.com/Raicuparta/rai-pal), with **UUVR** (the Unity *Mono, legacy* variant) installed for the game. Rai Pal also installs BepInEx 5 for you.
-- **frameeyeosc** running on the headset, sending to your PC (see below)
+- A **Steam Frame**
+- **Before Your Eyes** on Steam
+- **frameeyeosc** on the headset, for the eye data (see [Eye data from the headset](#eye-data-from-the-headset))
 
-## Install
+You can play in two ways:
+
+- **On the Steam Frame by itself**: the game runs on the headset (through Proton). Nothing else needed. See [Install on the Steam Frame](#install-on-the-steam-frame-standalone).
+- **Streamed from a Windows PC** with SteamVR and Steam Link: sharper and smoother, if you have a capable PC. See [Install on a PC](#install-on-a-pc-streamed).
+
+## Install on the Steam Frame (standalone)
+
+1. Install *Before Your Eyes* on the Frame from your Steam library and start it once (flat), then quit.
+2. Install frameeyeosc (next section) if you haven't yet.
+3. Open the Frame's desktop, start the terminal (Konsole) and run:
+
+   ```
+   curl -fsSLO https://github.com/davidciglesias/before-your-frame/releases/latest/download/frame_install.sh
+   sh frame_install.sh --eyes-local
+   ```
+
+   The script ([`tools/frame_install.sh`](tools/frame_install.sh), read it first if you like) finds the game, downloads [BepInEx 5](https://github.com/BepInEx/BepInEx) (the mod loader), [UUVR](https://github.com/Raicuparta/uuvr) 0.3.1 (the VR mod) and this mod from their GitHub releases, checks them against known checksums and puts them in the game folder, with UUVR's `UI Patch Mode = CanvasRedirect` set. Nothing outside the game folder is touched, except that `--eyes-local` points frameeyeosc at the headset itself (`127.0.0.1`; your previous frameeyeosc config is kept as `config.json.before-bye`). Leave `--eyes-local` out if you set the target yourself. Run the script again to update the mod; your settings are kept.
+4. In Steam, open *Before Your Eyes* > **Properties** > **Launch Options** and enter:
+
+   ```
+   WINEDLLOVERRIDES="winhttp=n,b" %command%
+   ```
+
+   This lets Proton load BepInEx. Without it the game starts flat, without the mod.
+5. Launch the game from the headset's library. The first launch takes a little longer.
+
+On the headset, **performance mode** turns on by itself (`Performance Mode = Auto`): lighter rendering, automatic resolution between 80% and 120%, and the game's live reflections paused (water looks flatter, `Performance Reflections`). Menus always render at full resolution so their text stays readable.
+
+To go back to streaming from a PC, restore frameeyeosc's target (`~/.config/frameeyeosc/config.json.before-bye`, or set the target PC in its dashboard panel). To remove the mod, clear the launch option (BepInEx no longer loads) and run *Verify integrity of game files* in Steam, which undoes UUVR's change to the game's settings file. You can also delete `BepInEx`, `winhttp.dll` and `doorstop_config.ini` from the game folder.
+
+## Install on a PC (streamed)
+
+You also need [**Rai Pal**](https://github.com/Raicuparta/rai-pal), with **UUVR** (the Unity *Mono, legacy* variant) installed for the game. Rai Pal also installs BepInEx 5 for you.
 
 1. In Rai Pal, add *Before Your Eyes* and install **UUVR** for it. Start the game once with UUVR to check the VR view works, then quit.
 2. Download `BYEFrameBlink.zip` from the [Releases](https://github.com/davidciglesias/before-your-frame/releases) page.
@@ -49,12 +82,19 @@ Use **New Game** or **Continue** as usual. Gaze at a menu button and blink to pr
 
 ## Eye data from the headset
 
+The Steam Frame tracks your eyes, but games can't read that data yet. **frameeyeosc** reads it on the headset and sends it out as OSC messages (the format VRChat face tracking uses), and this mod listens for them:
+
+- **Standalone:** frameeyeosc sends to the headset itself (`127.0.0.1`), where the game runs.
+- **Streamed:** frameeyeosc sends to your PC (its default target, `auto`, is the PC you stream from).
+
+Either way the mod gets your eyelids (for blinks) and your gaze (for aiming), with frameeyeosc's own filtering and calibration on top. No webcam, no extra hardware.
+
 The plugin listens for OSC messages over UDP on port **9000** and understands the format frameeyeosc sends:
 
 | Data | Address |
 |---|---|
 | Eyelid openness (0 shut, about 0.75 relaxed, 1 wide) | `/avatar/parameters/FT/v2/EyeLidLeft`, `.../EyeLidRight` |
-| Gaze (1.0 = 45Â°) | `/avatar/parameters/FT/v2/EyeLeftX`, `EyeLeftY`, `EyeRightX`, `EyeRightY` |
+| Gaze (1.0 = 45°) | `/avatar/parameters/FT/v2/EyeLeftX`, `EyeLeftY`, `EyeRightX`, `EyeRightY` |
 
 ### Install frameeyeosc on the Frame (once)
 
@@ -68,7 +108,7 @@ It installs into your home folder without admin rights and downloads from GitHub
 
 Keep the output on **VRChat directly** (the default): plain OSC to your PC on port 9000, with the default `/FT` prefix. The "VRCFT" output modes use other ports and formats, which this plugin does not read.
 
-Allow **UDP 9000 inbound** in the Windows firewall (private network) for the game's executable, and make sure the PC and the Frame are on the same network. Anything else that sends the same OSC addresses will work too.
+For standalone play, set its target to `127.0.0.1` (the install script's `--eyes-local` does that). For streaming, keep the default target and allow **UDP 9000 inbound** in the Windows firewall (private network) for the game's executable, with the PC and the Frame on the same network. Anything else that sends the same OSC addresses will work too.
 
 ## Keys
 
@@ -95,9 +135,12 @@ They work the same on either controller, so you can play holding just one:
 
 These are read through SteamVR's "legacy" controller buttons, the compatibility layer it keeps for exactly this kind of pre-2019, point-and-click game, so they need no per-headset setup. SteamVR exposes only two face-button slots there: `Menu Button` and `Blink Button` in the `[Controller]` section pick which one does what (`Menu` / `A`), if your controller maps them the other way round. The dedicated Menu/Start button next to the Steam button never reaches games, so it can't be used.
 
-### VR settings menu
+### Menus in VR
 
-The main menu and the pause menu have a **vr settings** entry under settings: eye tracking, world size, aiming dot, recentering, render quality, performance mode and auto resolution, in two columns, all changeable with gaze + blink (or the controller). Changes are saved to the config file right away.
+- The main menu and chapter select are laid out in **two columns** with plenty of room between options, so they're easy to pick by gaze. Options about the webcam (calibration, camera feed, eye detection guide) are hidden, since the headset replaces it.
+- **subtitles** replaces the game's settings page: every subtitle language (and "no subtitles") is a button, and the menus follow the chosen language. Subtitles are drawn bigger and bold, with an outline, so they read well in the headset.
+- **vr settings**: eye tracking, world size, aiming dot, recentering, render quality, performance mode and auto resolution, all changeable with gaze + blink (or the controller). Changes are saved to the config file right away.
+- **Opening the menu without a controller:** during play, tilt your head well down. A "menu" label appears below you, fixed in the world. Point your head at it (it lights up) and close your eyes for half a second to open the pause menu. Blinks don't reach the game while it's lit, so the story can't move on by accident. `Gaze Menu Opener = false` turns this off.
 
 ### Playing without eye tracking
 
@@ -114,7 +157,7 @@ All settings are in `BepInEx\config\byeframeblink.cfg`; the defaults should work
 - **Targets are hard to hit:** raise `Aim Assist Degrees` (3 by default, 0 turns it off).
 - **Head position:** set `Positional Tracking = true`. `Position Scale` scales the movement.
 - **Recentering:** `Recenter On Scene Start` (default on) makes the direction you're facing straight ahead at the start of every scene, since each scene is framed for that view. F6 does it any time, and Shift+F6 turns this on or off in game. These keys and F10/F11 show a short message in your view.
-- **Menus:** look roughly at an option and do a deliberate blink. The option nearest to where you look is selected if it is within `Menu Snap Degrees` (8; Back buttons reach further), and while a menu is open its panel is drawn `Menu Panel Scale` (1.5Ã—) bigger and the main and pause menu options are spaced `Menu Spacing` (1.35Ã—) farther apart, so they are easier to pick. `Menu Blink Seconds` (0.3) is how long the press blink must last; natural blinks are ignored.
+- **Menus:** look roughly at an option and do a deliberate blink. The option nearest to where you look is selected if it is within `Menu Snap Degrees` (8; Back buttons reach further), and while a menu is open its panel is drawn `Menu Panel Scale` (1.5×) bigger and the main and pause menu options are spaced `Menu Spacing` (1.35×) farther apart, so they are easier to pick. `Menu Blink Seconds` (0.3) is how long the press blink must last; natural blinks are ignored.
 - **Intro:** `Skip Intro Logos` skips the splash screens after the first launch.
 - **Aiming dot:** `Show Reticle` (F10 toggles it). `Reticle At Target Depth` draws the dot at the distance of what you look at, so it doesn't split in two when you focus on something close.
 
@@ -130,6 +173,11 @@ The game was framed for a flat screen, and many scenes put objects a few centime
 - `Render From Head Pose` (default on): while each frame is drawn, the game camera is turned to your head pose, so shading that depends on the view (for example the room tint in one chapter 3 scene) stays in the world instead of following your head.
 - **The camera you hold in some scenes:** it stays in front of you and points where you look (`Camera Device Follows View`, `Camera Device Follows Eyes`). `Camera Device Distance` (3) draws it farther away at the same size so it's easier to focus on, `Camera Device Size` (1.6) enlarges it so its edges stay out of view, and `Camera Device Sharp Frame` (on) draws its frame from a sharpened, higher-resolution copy. `Sync UI Camera` (on) draws the game's in-world UI from exactly your view, so the viewfinder sits on the aiming dot.
 - `Squint When Blink Ready` (default off): in the flat game the eyelids rise a little when a scene-ending blink is ready, which in VR shows up as a grey band at the edge of your view. The metronome icon still tells you.
+
+## Known issues
+
+- **Standalone: SteamVR's menu opens at launch, and the game is listed as "wine-preloader" without a picture.** Steam treats *Before Your Eyes* as a flat game and docks its window in SteamVR's menu, and under Proton SteamVR names it after the Wine process. Press **Resume Game** once; the rest of the session is unaffected. Other Steam Frame mods of flat games hit the same thing, and there's no fix from a mod's side so far.
+- **Standalone: water looks flatter** in performance mode, because live reflections are paused. Set `Performance Reflections = Full` to bring them back, at a big frame-rate cost in some scenes.
 
 ## Troubleshooting
 

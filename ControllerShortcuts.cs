@@ -1,3 +1,4 @@
+using UnityEngine;
 using System;
 using System.Collections.Generic;
 using Valve.VR;
@@ -137,8 +138,21 @@ namespace BYEFrameBlink
         }
 
         /// <summary>Mirrors the game's own Escape/P key handling in PauseMenuController.Update.</summary>
+        private static float _toggledAt = -10f, _pauseKeyAt = -10f;
+
+        /// <summary>True shortly after a controller toggled the pause menu: the game should ignore Escape/P then.</summary>
+        public static bool JustToggled => Time.unscaledTime - _toggledAt < 0.4f;
+
+        /// <summary>Called every frame: remembers when the game itself saw Escape/P, so our toggle doesn't undo it.</summary>
+        public static void TrackPauseKeys()
+        {
+            if (!JustToggled && (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.P))) _pauseKeyAt = Time.unscaledTime;
+        }
+
         private static void TogglePauseMenu()
         {
+            if (Time.unscaledTime - _pauseKeyAt < 0.4f) return; // the game already handled this press as Escape
+            _toggledAt = Time.unscaledTime;
             if (VrSettingsMenu.Back()) return;
             PauseMenuController pmc = PauseMenuController.instance;
             if (pmc == null) return;

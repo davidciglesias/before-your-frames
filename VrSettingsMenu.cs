@@ -28,19 +28,21 @@ namespace BYEFrameBlink
             public GameObject Host;
             public Button Template;
             public Button Entry;
+            public bool IsSettings; // our "settings" page (subtitles), standing in for the game's in VR
             public readonly List<Row> Rows = new List<Row>();
             public readonly List<GameObject> Hidden = new List<GameObject>();
             public UnityEngine.Object Audio;
         }
 
-        private static Context _main, _pause, _open;
+        private static Context _main, _pause, _mainS, _pauseS, _open;
         private static float _nextScan;
 
         public static bool IsOpen => _open != null;
 
+        private static IEnumerable<Context> All => new[] { _main, _pause, _mainS, _pauseS }.Where(c => c != null);
+
         /// <summary>One of our own settings rows (laid out by us, from the spacing of the menu's buttons).</summary>
-        public static bool IsRow(Selectable s) =>
-            (_main != null && _main.Rows.Any(r => r.Button == s)) || (_pause != null && _pause.Rows.Any(r => r.Button == s));
+        public static bool IsRow(Selectable s) => All.Any(c => c.Rows.Any(r => r.Button == s));
         public static int Entries => (_main?.Entry != null ? 1 : 0) + (_pause?.Entry != null ? 1 : 0);
         public static int OpenRows => _open == null ? 0 : _open.Rows.Count(r => r.Button != null && r.Button.gameObject.activeInHierarchy);
 
@@ -51,20 +53,32 @@ namespace BYEFrameBlink
                 _nextScan = Time.unscaledTime + 0.5f;
                 MainMenuController mmc = MainMenuController.Instance;
                 PauseMenuController pmc = PauseMenuController.instance;
-                Ensure(ref _main, mmc != null ? mmc.mainMenu : null);
-                Ensure(ref _pause, pmc != null ? pmc.pauseMenu : null);
+                Ensure(ref _main, mmc != null ? mmc.mainMenu : null, false);
+                Ensure(ref _pause, pmc != null ? pmc.pauseMenu : null, false);
+                Ensure(ref _mainS, mmc != null ? mmc.mainMenu : null, true);
+                Ensure(ref _pauseS, pmc != null ? pmc.pauseMenu : null, true);
+                // In VR the game's own settings page (dropdowns, webcam and window options) is replaced by ours.
+                bool vr = UnityEngine.XR.XRSettings.enabled;
+                foreach (Context c in All)
+                    if (c.Entry != null) SetLabel(new Row { Text = c.Entry.GetComponentInChildren<Text>(true), Tmp = c.Entry.GetComponentInChildren<TMPro.TMP_Text>(true) }, c.IsSettings ? MenuText.SubtitlesEntry : MenuText.VrSettingsEntry);
+                foreach (Context c in new[] { _mainS, _pauseS })
+                {
+                    if (c == null || c.Template == null || c.Entry == null) continue;
+                    if (c.Template.gameObject.activeSelf == vr && _open != c) c.Template.gameObject.SetActive(!vr);
+                    if (c.Entry.gameObject.activeSelf != vr && _open == null) c.Entry.gameObject.SetActive(vr);
+                }
             }
             if (_open == null) return;
 
             if (!ContextAlive(_open)) Close(false);
-            else if (Input.GetKeyUp(KeyCode.Escape) && _open == _main) Close(true);
+            else if (Input.GetKeyUp(KeyCode.Escape) && (_open == _main || _open == _mainS)) Close(true);
             else foreach (Row r in _open.Rows) SetLabel(r, r.Label());
         }
 
         private static bool ContextAlive(Context c)
         {
             if (c.Host == null || !c.Host.activeInHierarchy) return false;
-            if (c == _pause) return PauseMenuController.instance != null && PauseMenuController.instance.activeMenu == PauseMenuController.ActiveMenu.Pause;
+            if (c == _pause || c == _pauseS) return PauseMenuController.instance != null && PauseMenuController.instance.activeMenu == PauseMenuController.ActiveMenu.Pause;
             return MainMenuController.Instance != null && MainMenuController.Instance.activeMenu == MainMenuController.ActiveMenu.Main;
         }
 
@@ -76,20 +90,33 @@ namespace BYEFrameBlink
             return true;
         }
 
-        private static void Ensure(ref Context ctx, GameObject host)
+        private static void Ensure(ref Context ctx, GameObject host, bool settings)
         {
             if (host == null) return;
             if (ctx != null && ctx.Host == host && ctx.Entry != null) return;
-            Button template = host.GetComponentsInChildren<Button>(true)
-                .FirstOrDefault(b => b.name.IndexOf("settings", StringComparison.OrdinalIgnoreCase) >= 0 && b.transform.parent == host.transform);
+            Button[] buttons = host.GetComponentsInChildren<Button>(true).Where(b => b.transform.parent == host.transform).ToArray();
+            Button template = buttons.FirstOrDefault(b => b.name == "Settings Button")
+                ?? buttons.FirstOrDefault(b => b.name.IndexOf("settings", StringComparison.OrdinalIgnoreCase) >= 0
+                                               && !b.name.StartsWith("VR ") && !b.name.StartsWith("BYE "));
             if (template == null) return;
 
-            var c = new Context { Host = host, Template = template, Audio = FindAudio(template) };
+            var c = new Context { Host = host, Template = template, Audio = FindAudio(template), IsSettings = settings };
+            var t = (RectTransform)template.transform;
+            if (settings)
+            {
+                // Ours in the game's place; the game's is hidden while in VR (Update).
+                c.Entry = Clone(c, "BYE Subtitles Button", MenuText.SubtitlesEntry, () => Open(c), false);
+                ((RectTransform)c.Entry.transform).anchoredPosition = t.anchoredPosition;
+                c.Entry.transform.SetSiblingIndex(t.GetSiblingIndex());
+                c.Entry.gameObject.SetActive(false);
+                ctx = c;
+                Plugin.Log.LogInfo($"Added our subtitles page to {host.name}.");
+                return;
+            }
             List<RectTransform> column = Column(c);
             float step = Step(column);
-            var t = (RectTransform)template.transform;
 
-            c.Entry = Clone(c, "VR Settings Button", "vr settings", () => Open(c), false);
+            c.Entry = Clone(c, "VR Settings Button", MenuText.VrSettingsEntry, () => Open(c), false);
             var e = (RectTransform)c.Entry.transform;
             e.anchoredPosition = t.anchoredPosition + new Vector2(0f, step);
             e.SetSiblingIndex(t.GetSiblingIndex() + 1);
@@ -129,8 +156,12 @@ namespace BYEFrameBlink
             if (c.Rows.Count == 0) BuildRows(c);
             // Two columns, so the options get the same roomy spacing as the other menus (one column of all of them
             // ran off the menu), and back sits on its own below them like the game's back buttons.
-            if (UnityEngine.XR.XRSettings.enabled) step *= Mathf.Clamp(Plugin.MenuSpacing.Value, 1f, 2.5f);
+            float gameStep = step;
             int options = c.Rows.Count - 1, perColumn = (options + 1) / 2;
+            // Spread the rows over the height the single column took at the game's spacing (it just fit), so the
+            // options are far apart: in two columns there are half as many rows. Back sits 1.5 rows below.
+            if (UnityEngine.XR.XRSettings.enabled)
+                step = gameStep * Mathf.Max(Mathf.Clamp(Plugin.MenuSpacing.Value, 1f, 2.5f), (c.Rows.Count - 1) / (perColumn - 1 + 1.5f));
             float width = Mathf.Max(((RectTransform)c.Template.transform).rect.width, 200f);
             // Second column's text starts a margin after the first column's widest text ends. Spans account for the
             // labels' alignment: the main menu's are left-aligned, the pause menu's centred.
@@ -168,7 +199,7 @@ namespace BYEFrameBlink
         }
 
         /// <summary>Gap between the first column's widest text and the second column, in canvas units.</summary>
-        private const float ColumnMargin = 60f;
+        private const float ColumnMargin = 100f;
 
         /// <summary>
         /// Menus sit at different places on their canvas (the pause menu further right), so the page can run past an
@@ -200,6 +231,10 @@ namespace BYEFrameBlink
         private static float TextWidth(Row r) =>
             r.Tmp != null ? r.Tmp.preferredWidth : r.Text != null ? r.Text.preferredWidth : 0f;
 
+        /// <summary>Left and right of a menu button's visible text, in its own local x (for MenuSpread's columns).</summary>
+        internal static Vector2 TextSpanOf(Selectable s) =>
+            TextSpan(new Row { Button = s as Button, Text = s.GetComponentInChildren<Text>(true), Tmp = s.GetComponentInChildren<TMPro.TMP_Text>(true) });
+
         /// <summary>Left and right of a row's visible text, in its button's local x.</summary>
         private static Vector2 TextSpan(Row r)
         {
@@ -216,7 +251,9 @@ namespace BYEFrameBlink
                 int col = (int)r.Text.alignment % 3; // UpperLeft, UpperCenter, UpperRight, MiddleLeft, ...
                 a = col * 0.5f;
             }
-            float w = Mathf.Min(TextWidth(r), tr.rect.width);
+            // Text that doesn't wrap (our rows overflow) runs past its rect, so measure all of it; wrapped text stays inside.
+            bool wraps = r.Tmp != null ? r.Tmp.enableWordWrapping : r.Text != null && r.Text.horizontalOverflow == HorizontalWrapMode.Wrap;
+            float w = wraps ? Mathf.Min(TextWidth(r), tr.rect.width) : TextWidth(r);
             float left = tr.rect.xMin + a * (tr.rect.width - w);
             float l = button.InverseTransformPoint(tr.TransformPoint(new Vector3(left, 0f, 0f))).x;
             float rr = button.InverseTransformPoint(tr.TransformPoint(new Vector3(left + w, 0f, 0f))).x;
@@ -238,15 +275,32 @@ namespace BYEFrameBlink
 
         private static void BuildRows(Context c)
         {
-            AddRow(c, "VR Eye Tracking Button", () => "eye tracking: " + (Plugin.EyeTracking.Value == EyeTrackingMode.Off ? "off (head aim)" : "auto"), Plugin.ToggleEyeTracking);
-            AddRow(c, "VR World Size Button", () => "world size: " + StereoComfort.EyeSeparationLabel, StereoComfort.CycleEyeSeparation);
-            AddRow(c, "VR Aiming Dot Button", () => "aiming dot: " + OnOff(Plugin.ShowReticle.Value), Plugin.ToggleReticle);
-            AddRow(c, "VR Recenter Start Button", () => "recenter each scene: " + OnOff(Plugin.RecenterOnSceneStart.Value), Plugin.ToggleRecenterOnSceneStart);
-            AddRow(c, "VR Recenter Button", () => "recenter view now", () => HeadTracking.Recenter());
-            AddRow(c, "VR Render Quality Button", () => "render quality (in game): " + RenderScale.Label, RenderScale.Cycle);
-            AddRow(c, "VR Performance Button", () => "performance mode: " + Performance.Label, Performance.Cycle);
-            AddRow(c, "VR Auto Resolution Button", () => "auto resolution: " + AutoResolution.Label, AutoResolution.Cycle);
-            AddRow(c, "VR Back Button", () => "back", () => Close(true), true);
+            if (c.IsSettings) { BuildSettingsRows(c); return; }
+            BuildVrRows(c);
+        }
+
+        /// <summary>Our "settings": each subtitle choice (also the text language) as its own option, so it's one look and blink.</summary>
+        private static void BuildSettingsRows(Context c)
+        {
+            foreach (string option in Subtitles.Options)
+            {
+                string o = option;
+                AddRow(c, "BYE Subtitles " + o, () => Subtitles.Caption(o), () => Subtitles.Set(o));
+            }
+            AddRow(c, "BYE Settings Back Button", () => MenuText.Back, () => Close(true), true);
+        }
+
+        private static void BuildVrRows(Context c)
+        {
+            AddRow(c, "VR Eye Tracking Button", () => MenuText.Row("eye tracking", Plugin.EyeTracking.Value == EyeTrackingMode.Off ? "off (head aim)" : "auto"), Plugin.ToggleEyeTracking);
+            AddRow(c, "VR World Size Button", () => MenuText.Row("world size", StereoComfort.EyeSeparationLabel), StereoComfort.CycleEyeSeparation);
+            AddRow(c, "VR Aiming Dot Button", () => MenuText.Row("aiming dot", OnOff(Plugin.ShowReticle.Value)), Plugin.ToggleReticle);
+            AddRow(c, "VR Recenter Start Button", () => MenuText.Row("recenter each scene", OnOff(Plugin.RecenterOnSceneStart.Value)), Plugin.ToggleRecenterOnSceneStart);
+            AddRow(c, "VR Recenter Button", () => MenuText.Row("recenter view now", null), () => HeadTracking.Recenter());
+            AddRow(c, "VR Render Quality Button", () => MenuText.Row("render quality (in game)", RenderScale.Label), RenderScale.Cycle);
+            AddRow(c, "VR Performance Button", () => MenuText.Row("performance mode", Performance.Label), Performance.Cycle);
+            AddRow(c, "VR Auto Resolution Button", () => MenuText.Row("auto resolution", AutoResolution.Label), AutoResolution.Cycle);
+            AddRow(c, "VR Back Button", () => MenuText.Back, () => Close(true), true);
         }
 
         private static void AddRow(Context c, string name, Func<string> label, Action action, bool isBack = false)

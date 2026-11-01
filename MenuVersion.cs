@@ -16,6 +16,12 @@ namespace BYEFrameBlink
             if (label == null || __instance.transform.parent == null) return;
             if (__instance.transform.parent.Find("BYE VR Version") != null) return;
 
+            // Thin small text is unreadable at a headset's resolution: bolder and bigger (both labels, the copy inherits).
+            label.fontStyle = FontStyle.Bold;
+            label.fontSize = Mathf.RoundToInt(label.fontSize * 1.5f);
+            label.horizontalOverflow = HorizontalWrapMode.Overflow;
+            label.verticalOverflow = VerticalWrapMode.Overflow;
+
             GameObject copy = Object.Instantiate(__instance.gameObject, __instance.transform.parent, false);
             Object.DestroyImmediate(copy.GetComponent<GetVersionNumber>()); // or it would write the game's version
             copy.name = "BYE VR Version";

@@ -84,6 +84,12 @@ namespace BYEFrameBlink
                 case "hdr": foreach (Camera c in Camera.allCameras) c.allowHDR = v != 0f; break;
                 case "shadows": QualitySettings.shadows = v == 0f ? ShadowQuality.Disable : v == 1f ? ShadowQuality.HardOnly : ShadowQuality.All; break;
                 case "shadowdist": QualitySettings.shadowDistance = v; break;
+                case "lights": QualitySettings.pixelLightCount = (int)v; break;
+                case "softparticles": QualitySettings.softParticles = v != 0f; break;
+                case "probes": QualitySettings.realtimeReflectionProbes = v != 0f; break;
+                case "lod": QualitySettings.lodBias = v; break;
+                case "quality": QualitySettings.SetQualityLevel((int)v, false); break;
+                case "info": break;
                 case "pp":
                     foreach (Camera c in Camera.allCameras)
                     {
@@ -93,7 +99,9 @@ namespace BYEFrameBlink
                     break;
                 default: Plugin.Log.LogWarning($"[cmd] gfx: unknown '{a[0]}'"); return;
             }
-            Plugin.Log.LogInfo($"[cmd] gfx {a[0]} = {a[1]}");
+            Plugin.Log.LogInfo($"[cmd] gfx {a[0]} = {a[1]}; now quality={QualitySettings.names[QualitySettings.GetQualityLevel()]} " +
+                $"lights={QualitySettings.pixelLightCount} softParticles={QualitySettings.softParticles} probes={QualitySettings.realtimeReflectionProbes} " +
+                $"lod={QualitySettings.lodBias} shadows={QualitySettings.shadows} aa={QualitySettings.antiAliasing} levels={string.Join("/", QualitySettings.names)}");
         }
 
         /// <summary>

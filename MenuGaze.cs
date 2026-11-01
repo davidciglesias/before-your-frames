@@ -272,14 +272,24 @@ namespace BYEFrameBlink
             _cursor.enabled = true;
             float size = overButton ? 0.022f : 0.014f; // meters at 2 m (~0.6 / 0.4 degrees)
             _cursor.color = overButton ? new Color(1f, 1f, 1f, 0.95f) : new Color(1f, 1f, 1f, 0.6f);
-            Vector3 local = gaze * Vector3.forward;
-            if (overButton && _hover != null)
+            Transform t = _cursor.transform;
+            if (overButton && _hover != null && _panelQuad != null)
             {
-                // Selected option's centre: panel (tracking) space -> head space of the overlay camera.
+                // Locked on an option: put the dot on the panel itself, at the option's centre. Placing it through the
+                // head pose instead makes it tremble, as the headset renders with a slightly newer pose than ours.
+                if (t.parent != _panelQuad.parent) t.SetParent(_panelQuad.parent, false);
                 var rt = (RectTransform)_hover.transform;
-                Vector3 onPanel = PanelDirection(ScreenOf(rt, rt.rect.center)).normalized;
-                local = Quaternion.Inverse(HeadTracking.ReadHeadRotation()) * onPanel;
+                Vector2 sp = ScreenOf(rt, rt.rect.center);
+                Vector3 q = new Vector3(sp.x / Screen.width - 0.5f, (sp.y / Screen.height - 0.5f) * Mathf.Sign(_panelQuad.localScale.y), 0f);
+                Vector3 world = _panelQuad.TransformPoint(q);
+                Vector3 toEye = UiOverlay.Camera.transform.position - world;
+                t.position = world + toEye.normalized * 0.02f;
+                t.rotation = Quaternion.LookRotation(-toEye, _panelQuad.up) * Quaternion.Euler(0f, 0f, 45f);
+                t.localScale = new Vector3(size, size, 1f);
+                return;
             }
+            if (t.parent != UiOverlay.Camera.transform) t.SetParent(UiOverlay.Camera.transform, false);
+            Vector3 local = gaze * Vector3.forward;
             _cursor.transform.localPosition = local * PanelDistance * 0.99f;
             _cursor.transform.localRotation = Quaternion.LookRotation(local, Vector3.up) * Quaternion.Euler(0f, 0f, 45f);
             _cursor.transform.localScale = new Vector3(size, size, 1f);

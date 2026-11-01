@@ -50,7 +50,13 @@ namespace BYEFrameBlink
         public static string[] PatchedTypes { get; private set; } = new string[0];
 
         public static bool GetKey(KeyCode key) => Input.GetKey(key) || (key == BlinkKey && BlinkState.Closed);
-        public static bool GetKeyDown(KeyCode key) => Input.GetKeyDown(key) || (key == BlinkKey && BlinkState.ClosedThisFrame);
+        public static bool GetKeyDown(KeyCode key)
+        {
+            // A controller press can reach the game twice: our menu shortcut and Steam Input's keyboard emulation
+            // (Escape on the Frame's right controller), which opened the pause menu and closed it again at once.
+            if ((key == KeyCode.Escape || key == KeyCode.P) && ControllerShortcuts.JustToggled) return false;
+            return Input.GetKeyDown(key) || (key == BlinkKey && BlinkState.ClosedThisFrame);
+        }
         public static bool GetKeyUp(KeyCode key) => Input.GetKeyUp(key) || (key == BlinkKey && BlinkState.OpenedThisFrame);
 
         public static void PatchGameInputCalls(Harmony harmony)

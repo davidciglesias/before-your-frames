@@ -77,6 +77,8 @@ namespace BYEFrameBlink
             bool button = ControllerShortcuts.BlinkHeld;
             _closed = _filtered || button || Input.GetKey(Plugin.ForceBlinkKey.Value) || AutoPlay.ForceClosed;
             if (Freeze.Active) _closed = false;
+            // Eyes resting on the menu label (MenuOpener): blinks there open the menu, not the story.
+            if (MenuOpener.Armed && !button) _closed = false;
 
             if (_closed && !_prevClosed)
             {

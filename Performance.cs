@@ -7,6 +7,7 @@ using UnityEngine.PostProcessing;
 namespace BYEFrameBlink
 {
     internal enum PerformanceMode { Auto, On, Off }
+    internal enum ReflectionMode { Full, Off }
 
     /// <summary>
     /// For running on the headset itself (Proton + FEX on the Steam Frame's mobile chip), where the game's
