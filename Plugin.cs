@@ -6,12 +6,12 @@ using UnityEngine;
 
 namespace BYEFrameBlink
 {
-    [BepInPlugin(Guid, "BYE Frame Blink", Version)]
+    [BepInPlugin(Guid, "Before Your Frames", Version)]
     [BepInDependency("raicuparta.uuvr-legacy", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
         public const string Guid = "byeframeblink";
-        public const string Version = "0.6.1";
+        public const string Version = "0.7.0";
 
         internal static ManualLogSource Log;
         internal static Plugin Instance;
@@ -21,6 +21,8 @@ namespace BYEFrameBlink
         internal static ConfigEntry<string> LeftLidAddress;
         internal static ConfigEntry<string> RightLidAddress;
         internal static ConfigEntry<bool> LidValuesInverted;
+        internal static ConfigEntry<string> SourcePriority;
+        internal static ConfigEntry<string> ExtraPorts;
 
         // Blink detection
         internal static ConfigEntry<float> CloseThreshold;
@@ -112,13 +114,20 @@ namespace BYEFrameBlink
             Instance = this;
             Log = Logger;
 
-            OscPort = Config.Bind("OSC", "Port", 9000, "UDP port to listen on for OSC eyelid data (frameeyeosc 'VRChat direct' mode uses 9000).");
+            OscPort = Config.Bind("OSC", "Port", 9000, "UDP port to listen on for OSC eye data. frameeyeosc ('VRChat direct'), Steam Link's built-in OSC and VRCFaceTracking all send to 9000.");
+            ExtraPorts = Config.Bind("OSC", "Extra Ports", "8888",
+                "More UDP ports to listen on, comma-separated (Babble / Baballonia sends to 8888). Empty = none.");
+            SourcePriority = Config.Bind("OSC", "Source Priority", "frameeyeosc,steamvr,babble,vrcft",
+                "Eye-tracking sources in order of preference. Only one drives the game at a time: the first one in this list that is " +
+                "sending eyelid data. A lower one takes over when the one in use goes quiet. Leave a name out to ignore that source. " +
+                "frameeyeosc = .../FT/v2/... addresses (and other VRCFT-style senders); steamvr = Steam Link's own OSC output; " +
+                "babble = Baballonia / Babble Frame Runtime; vrcft = VRCFaceTracking (/avatar/parameters/v2/...).");
             LeftLidAddress = Config.Bind("OSC", "Left Lid Address", "/avatar/parameters/FT/v2/EyeLidLeft",
-                "OSC address for the left eyelid. Any address ending in this value's last path segment also matches.");
+                "frameeyeosc source: OSC address for the left eyelid. Any address ending in this value's last path segment also matches.");
             RightLidAddress = Config.Bind("OSC", "Right Lid Address", "/avatar/parameters/FT/v2/EyeLidRight",
-                "OSC address for the right eyelid. Any address ending in this value's last path segment also matches.");
+                "frameeyeosc source: OSC address for the right eyelid. Any address ending in this value's last path segment also matches.");
             LidValuesInverted = Config.Bind("OSC", "Lid Values Inverted", false,
-                "Set true if the source sends 0 = open, 1 = shut (e.g. Steam Link's LeftEyeLid/RightEyeLid). frameeyeosc sends 0 = shut.");
+                "frameeyeosc source: set true if it sends 0 = open, 1 = shut (frameeyeosc itself sends 0 = shut). The other sources are handled automatically.");
 
             CloseThreshold = Config.Bind("Blink", "Close Threshold", 0.35f, "Openness (0 shut .. 1 wide) below which an eye counts as closed.");
             OpenThreshold = Config.Bind("Blink", "Open Threshold", 0.5f, "Openness above which a closed eye counts as open again (hysteresis).");
@@ -248,7 +257,7 @@ namespace BYEFrameBlink
             FreezeKey = Config.Bind("Debug", "Freeze Key", KeyCode.F5, "Freeze/unfreeze the game without the pause menu (eyes treated as open while frozen). For inspecting scenes.");
             RecenterKey = Config.Bind("Debug", "Recenter Key", KeyCode.F6, "Make the direction you face straight ahead (and reset head position). Shift + this key toggles Recenter On Scene Start.");
 
-            OscReceiver.Start(OscPort.Value);
+            OscReceiver.Start(OscPort.Value, ExtraPorts.Value);
 
             var harmony = new Harmony(Guid);
             harmony.PatchAll(typeof(Plugin).Assembly);
@@ -262,7 +271,7 @@ namespace BYEFrameBlink
             HeadTracking.PatchRecenter(harmony);
             IntroSkip.Init();
 
-            Log.LogInfo("BYE Frame Blink loaded.");
+            Log.LogInfo("Before Your Frames loaded.");
         }
 
         private void Update()

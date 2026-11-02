@@ -1,4 +1,4 @@
-# BYE Frame Blink: development notes
+# Before Your Frames: development notes
 
 How the plugin works, how to build it, and the test tooling. For installing and using it, see the [README](../README.md).
 

@@ -64,6 +64,7 @@ namespace BYEFrameBlink
             Add("uuvrPatched", HeadTracking.Patched);
 
             Add("oscPackets", OscReceiver.PacketCount);
+            Add("eyeSource", OscReceiver.ActiveSourceLabel ?? "none");
             Add("lidLeft", OscReceiver.LeftLid);
             Add("lidRight", OscReceiver.RightLid);
             Add("lidHasData", BlinkState.HasData);

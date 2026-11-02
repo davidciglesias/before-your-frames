@@ -1,6 +1,6 @@
 # Third-party notices
 
-BYE Frame Blink is MIT licensed (see [LICENSE](LICENSE)). The release zip contains `BYEFrameBlink.dll`, this file, the README and the LICENSE. With one exception (OpenVR, below), it includes no code or binaries from the projects listed here; they are installed separately by the user and used at runtime, or referenced at build time from the user's own installation.
+Before Your Frames is MIT licensed (see [LICENSE](LICENSE)). The release zip contains `BYEFrameBlink.dll`, this file, the README and the LICENSE. With one exception (OpenVR, below), it includes no code or binaries from the projects listed here; they are installed separately by the user and used at runtime, or referenced at build time from the user's own installation.
 
 | Project | Role | License |
 |---|---|---|

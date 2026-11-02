@@ -67,14 +67,14 @@ try {
         if (Get-Process 'Before Your Eyes' -ErrorAction SilentlyContinue) { Stop-Process -Name 'Before Your Eyes'; [Threading.Thread]::Sleep(3000) }
         $launchTime = Get-Date
         Start-Process 'steam://rungameid/1082430'
-        $loaded = Wait-Until { (Test-Path $Log) -and (Get-Item $Log).LastWriteTime -gt $launchTime -and ((Get-Content $Log -Raw) -match 'BYE Frame Blink loaded') } 120 1000
+        $loaded = Wait-Until { (Test-Path $Log) -and (Get-Item $Log).LastWriteTime -gt $launchTime -and ((Get-Content $Log -Raw) -match 'Before Your Frames loaded') } 120 1000
         Check 'plugin loads' $loaded
         if (-not $loaded) { throw 'plugin did not load' }
         Wait-Until { (Get-Content $Log -Raw) -match 'Chainloader startup complete' } 60 1000 | Out-Null
     }
 
     $logText = Get-Content $Log -Raw
-    $bye = ($logText -split "`n") | Where-Object { $_ -match 'BYE Frame Blink' -and $_ -match 'Exception|Error' }
+    $bye = ($logText -split "`n") | Where-Object { $_ -match 'Before Your Frames' -and $_ -match 'Exception|Error' }
     Check 'no plugin errors in log at startup' (-not $bye) ($bye -join ' | ')
 
     # Wait until the plugin answers status (main loop running).
@@ -162,7 +162,7 @@ try {
         $v0 = Status 'vr-entry'
         Check 'vr settings entry in the main menu' ($v0.vrMenuEntries -ge 1) "entries=$($v0.vrMenuEntries)"
         $r = MenuPress 'VR Settings Button' 'vr-open'
-        Check 'gaze+blink opens VR settings' ([bool]$r[1].vrMenuOpen -and ($r[1].vrMenuRows -eq 9)) "open=$($r[1].vrMenuOpen) rows=$($r[1].vrMenuRows)"
+        Check 'gaze+blink opens VR settings' ([bool]$r[1].vrMenuOpen -and ($r[1].vrMenuRows -eq 8)) "open=$($r[1].vrMenuOpen) rows=$($r[1].vrMenuRows)"
         $sep0 = $r[1].eyeSeparation
         $r = MenuPress 'VR World Size Button' 'vr-size'
         Check 'VR settings: world size row cycles it' (-not (Near $r[1].eyeSeparation $sep0 0.01)) "$sep0 -> $($r[1].eyeSeparation)"
@@ -226,6 +226,7 @@ try {
     $c = Status 'post-flicker'
     Check '20 ms flicker filtered' ($c.pluginBlinks -eq $b.pluginBlinks) "plugin $($b.pluginBlinks)->$($c.pluginBlinks)"
 
+    [Threading.Thread]::Sleep(1300) # the test channel outranks every tracker: let it go quiet first
     Repeat-Send { & $Sim ft 0.8 } 0.3; Repeat-Send { & $Sim ft 0.1 } 0.3; Repeat-Send { & $Sim ft 0.8 } 0.4
     $d = Status 'post-ft'
     Check 'frameeyeosc FT/v2/EyeLid addresses' ($d.pluginBlinks -eq $c.pluginBlinks + 1) "plugin $($c.pluginBlinks)->$($d.pluginBlinks)"
@@ -238,6 +239,47 @@ try {
     Check 'held eyes read as closed' ([bool]$e.eyesClosed) "openness=$($e.openness)"
     Check 'eyes open after hold' (-not [bool]$f.eyesClosed) "openness=$($f.openness)"
     Check 'hold counts as one blink' ($f.pluginBlinks -eq $d.pluginBlinks + 1) "plugin $($d.pluginBlinks)->$($f.pluginBlinks)"
+
+    # ---------------------------------------------------------------- eye-tracking sources (priority chain)
+    $prev = $f
+    foreach ($src in @(@('steamvr', 'SteamVR'), @('babble', 'Babble'), @('vrcft', 'VRCFT'))) {
+        $cmd = $src[0]; $label = $src[1]
+        [Threading.Thread]::Sleep(1300) # previous source goes quiet
+        Repeat-Send { & $Sim $cmd 0.8 } 0.3; Repeat-Send { & $Sim $cmd 0.1 } 0.3; Repeat-Send { & $Sim $cmd 0.8 } 0.4
+        $s = Status "src-$cmd"
+        Check "$label addresses -> one blink" ($s.pluginBlinks -eq $prev.pluginBlinks + 1) "plugin $($prev.pluginBlinks)->$($s.pluginBlinks)"
+        Check "$label reported as source" ($s.eyeSource -eq $label) "eyeSource=$($s.eyeSource)"
+        $prev = $s
+    }
+
+    [Threading.Thread]::Sleep(1300)
+    Repeat-Send { & $Sim ft 0.8; & $Sim steamvr 0.8 } 0.8
+    Repeat-Send { & $Sim ft 0.8; & $Sim steamvr 0.1 } 0.4
+    Repeat-Send { & $Sim ft 0.8; & $Sim steamvr 0.8 } 0.4
+    $s = Status 'chain-priority'
+    Check 'frameeyeosc outranks SteamVR (its blink ignored)' ($s.pluginBlinks -eq $prev.pluginBlinks) "plugin $($prev.pluginBlinks)->$($s.pluginBlinks)"
+    Check 'frameeyeosc in use while both send' ($s.eyeSource -eq 'frameeyeosc') "eyeSource=$($s.eyeSource)"
+
+    Repeat-Send { & $Sim steamvrgaze 0.4 0; & $Sim ft 0.8; & $Sim steamvr 0.8 } 0.8
+    $s = Status 'chain-gaze-other'
+    Check "lower source's gaze ignored" (-not [bool]$s.gazeActive) "gazeActive=$($s.gazeActive) yaw=$($s.gazeYaw)"
+    Repeat-Send { & $Sim ftgaze -0.4 0; & $Sim steamvrgaze 0.4 0; & $Sim ft 0.8; & $Sim steamvr 0.8 } 0.8
+    $s = Status 'chain-gaze-active'
+    Check "active source's gaze used" ([bool]$s.gazeActive -and (Near $s.gazeYaw -18 1)) "gazeActive=$($s.gazeActive) yaw=$($s.gazeYaw)"
+
+    Repeat-Send { & $Sim steamvr 0.8; & $Sim steamvrgaze 0.4 0 } 1.4
+    $s = Status 'chain-fallback'
+    Check 'SteamVR takes over when frameeyeosc goes quiet' ($s.eyeSource -eq 'SteamVR') "eyeSource=$($s.eyeSource)"
+    Check 'gaze follows the new source' ([bool]$s.gazeActive -and (Near $s.gazeYaw 18 1)) "gazeActive=$($s.gazeActive) yaw=$($s.gazeYaw)"
+    $before = $s.pluginBlinks
+    Repeat-Send { & $Sim steamvr 0.1 } 0.3; Repeat-Send { & $Sim steamvr 0.8 } 0.4
+    $s = Status 'chain-fallback-blink'
+    Check 'fallback source blinks' ($s.pluginBlinks -eq $before + 1) "plugin $before->$($s.pluginBlinks)"
+
+    Repeat-Send { & $Sim ft 0.8; & $Sim steamvr 0.8 } 0.9
+    $s = Status 'chain-recover'
+    Check 'frameeyeosc takes back over when it resumes' ($s.eyeSource -eq 'frameeyeosc') "eyeSource=$($s.eyeSource)"
+    $f = $s
 
     [Threading.Thread]::Sleep(1600)
     $g = Status 'timeout'
@@ -363,7 +405,7 @@ try {
     & $Sim invoke PauseMenuController.Pause; [Threading.Thread]::Sleep(1500)
     & $Sim click 'vr settings'; [Threading.Thread]::Sleep(1000)
     $pv = Status 'pause-vr'
-    Check 'VR settings open from the pause menu' ([bool]$pv.vrMenuOpen -and ($pv.vrMenuRows -eq 9)) "open=$($pv.vrMenuOpen) rows=$($pv.vrMenuRows)"
+    Check 'VR settings open from the pause menu' ([bool]$pv.vrMenuOpen -and ($pv.vrMenuRows -eq 8)) "open=$($pv.vrMenuOpen) rows=$($pv.vrMenuRows)"
     & $Sim invoke PauseMenuController.Resume; [Threading.Thread]::Sleep(1000)
     $pr = Status 'pause-resume'
     Check 'resuming closes VR settings' (-not $pr.vrMenuOpen) "open=$($pr.vrMenuOpen)"

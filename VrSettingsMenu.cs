@@ -348,14 +348,13 @@ namespace BYEFrameBlink
 
         private static void BuildVrRows(Context c)
         {
-            AddRow(c, "VR Eye Tracking Button", () => MenuText.Row("eye tracking", Plugin.EyeTracking.Value == EyeTrackingMode.Off ? "off (head aim)" : "auto"), Plugin.ToggleEyeTracking);
+            AddRow(c, "VR Eye Tracking Button", () => MenuText.Row("eye tracking", Plugin.EyeTracking.Value == EyeTrackingMode.Off ? "off (head aim)" : OscReceiver.ActiveSourceLabel ?? "auto (no data)"), Plugin.ToggleEyeTracking);
             AddRow(c, "VR World Size Button", () => MenuText.Row("world size", StereoComfort.EyeSeparationLabel), StereoComfort.CycleEyeSeparation);
             AddRow(c, "VR Aiming Dot Button", () => MenuText.Row("aiming dot", OnOff(Plugin.ShowReticle.Value)), Plugin.ToggleReticle);
             AddRow(c, "VR Recenter Start Button", () => MenuText.Row("recenter each scene", OnOff(Plugin.RecenterOnSceneStart.Value)), Plugin.ToggleRecenterOnSceneStart);
             AddRow(c, "VR Recenter Button", () => MenuText.Row("recenter view now", null), () => HeadTracking.Recenter());
             AddRow(c, "VR Render Quality Button", () => MenuText.Row("render quality (in game)", RenderScale.Label), RenderScale.Cycle);
             AddRow(c, "VR Performance Button", () => MenuText.Row("performance mode", Performance.Label), Performance.Cycle);
-            AddRow(c, "VR Auto Resolution Button", () => MenuText.Row("auto resolution", AutoResolution.Label), AutoResolution.Cycle);
             AddRow(c, "VR Back Button", () => MenuText.Back, () => Close(true), true);
         }
 

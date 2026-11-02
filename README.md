@@ -1,6 +1,8 @@
-﻿# BYE Frame Blink
+﻿# Before Your Frames
 
 Play **Before Your Eyes** in VR on a **Steam Frame**, with your real blinks and eye gaze.
+
+Made for the Steam Frame, but not only for it: on a PC, other eye-tracking headsets can work too, through SteamVR's own eye output, Babble or VRCFaceTracking (see [Other eye-tracking sources](#other-eye-tracking-sources)). Those haven't been tested on real hardware other than the Frame yet.
 
 *Before Your Eyes* is controlled by blinking. The game normally reads your blinks from a webcam. This mod, a BepInEx plugin that runs next to [UUVR](https://github.com/Raicuparta/uuvr), replaces the webcam with the Frame's eye tracking:
 
@@ -21,9 +23,9 @@ Your normal mouse still works as a fallback.
 
 ## Status
 
-Works on the author's Steam Frame. The whole game has also been played from start to the credits with an automated bot that drives the same input paths a player uses (simulated eyes and head), and 102 regression tests pass. Please open an issue if something misbehaves on your setup.
+Works on the author's Steam Frame. The whole game has also been played from start to the credits with an automated bot that drives the same input paths a player uses (simulated eyes and head), and 115 regression tests pass. Please open an issue if something misbehaves on your setup.
 
-The eye data comes from frameeyeosc, an experimental tool that reads a private interface of the headset software, so a headset update can break it.
+On the Frame, the eye data comes from frameeyeosc, an experimental tool that reads a private interface of the headset software, so a headset update can break it. When streaming to a PC, SteamVR's own eye output (Steam Link) works too, without frameeyeosc.
 
 ## What you need
 
@@ -43,7 +45,7 @@ You can play in two ways:
 3. Open the Frame's desktop, start the terminal (Konsole) and run:
 
    ```
-   curl -fsSLO https://github.com/davidciglesias/before-your-frame/releases/latest/download/frame_install.sh
+   curl -fsSLO https://github.com/davidciglesias/before-your-frames/releases/latest/download/frame_install.sh
    sh frame_install.sh --eyes-local
    ```
 
@@ -66,7 +68,7 @@ To go back to streaming from a PC, restore frameeyeosc's target (`~/.config/fram
 You also need [**Rai Pal**](https://github.com/Raicuparta/rai-pal), with **UUVR** (the Unity *Mono, legacy* variant) installed for the game. Rai Pal also installs BepInEx 5 for you.
 
 1. In Rai Pal, add *Before Your Eyes* and install **UUVR** for it. Start the game once with UUVR to check the VR view works, then quit.
-2. Download `BYEFrameBlink.zip` from the [Releases](https://github.com/davidciglesias/before-your-frame/releases) page.
+2. Download `BYEFrameBlink.zip` from the [Releases](https://github.com/davidciglesias/before-your-frames/releases) page.
 3. Extract it so that `BYEFrameBlink.dll` ends up in the game's BepInEx plugins folder:
 
    ```
@@ -109,6 +111,18 @@ It installs into your home folder without admin rights and downloads from GitHub
 Keep the output on **VRChat directly** (the default): plain OSC to your PC on port 9000, with the default `/FT` prefix. The "VRCFT" output modes use other ports and formats, which this plugin does not read.
 
 For standalone play, set its target to `127.0.0.1` (the install script's `--eyes-local` does that). For streaming, keep the default target and allow **UDP 9000 inbound** in the Windows firewall (private network) for the game's executable, with the PC and the Frame on the same network. Anything else that sends the same OSC addresses will work too.
+
+### Other eye-tracking sources
+
+The mod also reads these, so frameeyeosc isn't the only option:
+
+| Source | What it sends | Notes |
+|---|---|---|
+| **SteamVR (Steam Link)** | `/avatar/parameters/LeftEyeLid`, `RightEyeLid`, `LeftEyeX/Y`, `RightEyeX/Y` to port 9000 | Built into Steam Link when streaming from a Steam Frame (SteamVR 2.18.2+, SteamOS 0.4.3+). Turn on its OSC output and eye-tracking sharing in Steam Link's VR settings. Streaming only. |
+| **Babble** (Baballonia, Babble Frame Runtime) | `/LeftEyeLid`, `/RightEyeLid`, `/LeftEyeX/Y`, `/RightEyeX/Y` to port 8888 | Enable Babble's OSC output. The mod also listens on 8888 (`Extra Ports`). |
+| **VRCFaceTracking** | `/avatar/parameters/v2/EyeOpenLeft/Right`, `EyeLeftX`, `EyeRightX`, `EyeY` to port 9000 | VRCFT only sends parameters an avatar asks for; the mod doesn't set that up for you, so it works only if VRCFT is already sending these. |
+
+Only one source drives the game at a time. By default it's the first of **frameeyeosc → SteamVR → Babble → VRCFT** that is sending eyelid data. If that one goes quiet for a second, the next one takes over. When a higher one starts sending again, it takes back over after half a second. Change the order, or leave a source out, with `Source Priority` in the `[OSC]` config section. The *eye tracking* row in the mod's VR settings shows which source is in use.
 
 ## Keys
 

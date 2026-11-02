@@ -131,8 +131,8 @@ namespace BYEFrameBlink
 
             var counter = UnityEngine.Object.FindObjectOfType<BlinkCounter>();
             string text =
-                $"BYE Frame Blink\n" +
-                $"OSC packets: {OscReceiver.PacketCount}  last: {OscReceiver.LastAddress}\n" +
+                $"Before Your Frames\n" +
+                $"OSC packets: {OscReceiver.PacketCount}  last: {OscReceiver.LastAddress}  source: {OscReceiver.ActiveSourceLabel ?? "none"}\n" +
                 $"Lid L {OscReceiver.LeftLid:F2}  R {OscReceiver.RightLid:F2}  -> {BlinkState.Openness:F2}  (close<{Plugin.CloseThreshold.Value:F2} open>{Plugin.OpenThreshold.Value:F2})\n" +
                 $"Data: {(BlinkState.HasData ? "OK" : "NONE")}   EYES {(BlinkState.Closed ? "CLOSED" : "open")}   blinks: {BlinkState.BlinkCount}  game accepted: {BlinkConfirmedCounter.Count}\n" +
                 $"Game mode: {(counter != null ? counter._detectionMode.ToString() : "-")}  canBlink: {(counter != null && counter._canBlink)}\n" +

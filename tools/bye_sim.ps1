@@ -6,6 +6,11 @@ Test driver for BYEFrameBlink: sends fake eyelid / head-pose OSC to the plugin (
   bye_sim.ps1 blink [ms]         one blink (default 150 ms closed)
   bye_sim.ps1 hold [seconds]     hold eyes shut (default 3)
   bye_sim.ps1 ft 0.2             frameeyeosc-style /avatar/parameters/FT/v2/EyeLidLeft|Right
+  bye_sim.ps1 ftgaze x y         frameeyeosc-style gaze /avatar/parameters/FT/v2/EyeX|EyeY
+  bye_sim.ps1 steamvr 0.2        Steam Link-style /avatar/parameters/LeftEyeLid|RightEyeLid (value given as openness; sent inverted)
+  bye_sim.ps1 steamvrgaze x y    Steam Link-style /avatar/parameters/LeftEyeX|Y, RightEyeX|Y (y given +up; sent +down)
+  bye_sim.ps1 babble 0.2         Babble-style /LeftEyeLid|/RightEyeLid to port 8888
+  bye_sim.ps1 vrcft 0.2          VRCFaceTracking-style /avatar/parameters/v2/EyeOpenLeft|Right
   bye_sim.ps1 stream [seconds]   open eyes at 60 Hz with a blink every ~3 s
   bye_sim.ps1 head x y z pitch yaw roll
   bye_sim.ps1 lean               scripted lean test: +-0.2 m per axis, then yaw 90
@@ -41,12 +46,18 @@ function Pad([byte[]]$b) {
     $out = New-Object byte[] $len; [Array]::Copy($b, $out, $b.Length); return , $out
 }
 
-function Send([string]$address, [double[]]$floats = @()) {
+function Send([string]$address, [double[]]$floats = @(), $client = $udp) {
     $ms = New-Object System.IO.MemoryStream
     $a = Pad ([Text.Encoding]::ASCII.GetBytes($address)); $ms.Write($a, 0, $a.Length)
     $t = Pad ([Text.Encoding]::ASCII.GetBytes(',' + ('f' * $floats.Count))); $ms.Write($t, 0, $t.Length)
     foreach ($f in $floats) { $fb = [BitConverter]::GetBytes([single]$f); [Array]::Reverse($fb); $ms.Write($fb, 0, 4) }
-    $bytes = $ms.ToArray(); [void]$udp.Send($bytes, $bytes.Length)
+    $bytes = $ms.ToArray(); [void]$client.Send($bytes, $bytes.Length)
+}
+
+# Babble (Baballonia) sends to its own port.
+function SendBabble([string]$address, [double]$v) {
+    $b = New-Object System.Net.Sockets.UdpClient; $b.Connect('127.0.0.1', 8888)
+    Send $address @($v) $b; $b.Close()
 }
 
 function SendString([string]$address, [string]$value) {
@@ -70,6 +81,14 @@ function Head([double[]]$p) { Send '/bye/head' $p }
 switch ($Cmd) {
     'lid'      { if ($Values.Count -gt 1) { Lid $Values[0] $Values[1] } else { Lid $Values[0] } }
     'ft'       { Send '/avatar/parameters/FT/v2/EyeLidLeft' @($Values[0]); Send '/avatar/parameters/FT/v2/EyeLidRight' @($Values[0]) }
+    'ftgaze'   { Send '/avatar/parameters/FT/v2/EyeX' @($Values[0]); Send '/avatar/parameters/FT/v2/EyeY' @($Values[1]) }
+    'steamvr'  { Send '/avatar/parameters/LeftEyeLid' @(1 - $Values[0]); Send '/avatar/parameters/RightEyeLid' @(1 - $Values[0]) }
+    'steamvrgaze' {
+        Send '/avatar/parameters/LeftEyeX' @($Values[0]); Send '/avatar/parameters/RightEyeX' @($Values[0])
+        Send '/avatar/parameters/LeftEyeY' @(-$Values[1]); Send '/avatar/parameters/RightEyeY' @(-$Values[1]) # Steam Link: + is down
+    }
+    'babble'   { SendBabble '/LeftEyeLid' $Values[0]; SendBabble '/RightEyeLid' $Values[0] }
+    'vrcft'    { Send '/avatar/parameters/v2/EyeOpenLeft' @($Values[0]); Send '/avatar/parameters/v2/EyeOpenRight' @($Values[0]) }
     'blink'    { $ms = if ($Values.Count) { $Values[0] } else { 150 }; HoldValue 0.8 0.3; HoldValue 0.05 ($ms / 1000); HoldValue 0.8 0.5 }
     'hold'     { $s = if ($Values.Count) { $Values[0] } else { 3 }; HoldValue 0.8 0.3; HoldValue 0.05 $s; HoldValue 0.8 0.5 }
     'stream'   {

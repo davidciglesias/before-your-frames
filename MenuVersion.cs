@@ -31,7 +31,32 @@ namespace BYEFrameBlink
             // The game's label sits at the bottom edge of the menu, so lift it a line and put ours in its place.
             rt.anchoredPosition = src.anchoredPosition;
             src.anchoredPosition += new Vector2(0f, line);
-            copy.GetComponent<Text>().text = "VR V " + Plugin.Version;
+            copy.AddComponent<EyeSourceLabel>().Init(copy.GetComponent<Text>());
+        }
+    }
+
+    /// <summary>Keeps the main menu's "VR V x · eyes: source" line current, so you can see which eye tracker is in use.</summary>
+    internal class EyeSourceLabel : MonoBehaviour
+    {
+        private Text _text;
+        private float _next;
+
+        public void Init(Text text) { _text = text; Refresh(); }
+
+        private void Update()
+        {
+            if (Time.unscaledTime < _next) return;
+            Refresh();
+        }
+
+        private void Refresh()
+        {
+            _next = Time.unscaledTime + 0.5f;
+            if (_text == null) return;
+            string source = Plugin.EyeTracking.Value == EyeTrackingMode.Off ? MenuText.T("off")
+                : OscReceiver.ActiveSourceLabel ?? MenuText.T("no data");
+            string s = "VR V " + Plugin.Version + " · " + MenuText.T("eyes") + ": " + source;
+            if (_text.text != s) _text.text = s;
         }
     }
 }

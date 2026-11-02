@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install BYE Frame Blink for playing Before Your Eyes on the Steam Frame itself (no PC).
+# Install Before Your Frames for playing Before Your Eyes on the Steam Frame itself (no PC).
 #   sh frame_install.sh [game folder]
 # Run it in the Frame's desktop terminal (Konsole) with the game installed and not running. It downloads, from their
 # official GitHub releases and checked against known hashes: BepInEx 5 (the mod loader), UUVR 0.3.1 (the VR mod, Unity
@@ -11,7 +11,7 @@ BEPINEX_URL=https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.6/BepIn
 BEPINEX_SHA=6c57a714a892efb4e9e1fef63d608a3391f30ec984031c465404e4ee381a0755
 UUVR_URL=https://github.com/Raicuparta/uuvr/releases/download/v0.3.1/uuvr-mono-legacy.zip
 UUVR_SHA=e23b18bed81ef1964087c434299265783567ca8ae58037488d5589590f9db680
-MOD_URL=${BYE_ZIP:-https://github.com/davidciglesias/before-your-frame/releases/latest/download/BYEFrameBlink.zip}
+MOD_URL=${BYE_ZIP:-https://github.com/davidciglesias/before-your-frames/releases/latest/download/BYEFrameBlink.zip}
 
 EYES_LOCAL=0
 GAME=""
@@ -47,7 +47,7 @@ fetch() { # url, file, sha256 (empty = don't check)
     if [ -n "$3" ] && [ "$(sha256sum "$2" | cut -d' ' -f1)" != "$3" ]; then echo "Checksum mismatch for $1" >&2; exit 1; fi
 }
 
-echo "Downloading BepInEx, UUVR and BYE Frame Blink..."
+echo "Downloading BepInEx, UUVR and Before Your Frames..."
 fetch "$BEPINEX_URL" "$TMP/bepinex.zip" "$BEPINEX_SHA"
 fetch "$UUVR_URL" "$TMP/uuvr.zip" "$UUVR_SHA"
 fetch "$MOD_URL" "$TMP/mod.zip" ""
