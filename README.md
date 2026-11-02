@@ -2,7 +2,7 @@
 
 Play **Before Your Eyes** in VR on a **Steam Frame**, with your real blinks and eye gaze.
 
-Made for the Steam Frame, but not only for it: on a PC, other eye-tracking headsets can work too, through SteamVR's own eye output, Babble or VRCFaceTracking (see [Other eye-tracking sources](#other-eye-tracking-sources)). Those haven't been tested on real hardware other than the Frame yet.
+Made for the Steam Frame, but not only for it: on a PC, other eye-tracking headsets can work too, through SteamVR's own eye output, Babble or VRCFaceTracking (see [Other eye-tracking sources](#other-eye-tracking-sources)). Those haven't been tested on real hardware other than the Frame yet. Headsets without eye tracking, like a Quest 3 or Pico streamed from a PC, can play with head aiming and a controller button for blinks (see [Playing without eye tracking](#playing-without-eye-tracking)).
 
 *Before Your Eyes* is controlled by blinking. The game normally reads your blinks from a webcam. This mod, a BepInEx plugin that runs next to [UUVR](https://github.com/Raicuparta/uuvr), replaces the webcam with the Frame's eye tracking:
 
@@ -37,6 +37,8 @@ You can play in two ways:
 
 - **On the Steam Frame by itself**: the game runs on the headset (through Proton). Nothing else needed. See [Install on the Steam Frame](#install-on-the-steam-frame-standalone).
 - **Streamed from a Windows PC** with SteamVR and Steam Link: sharper and smoother, if you have a capable PC. See [Install on a PC](#install-on-a-pc-streamed).
+
+Standalone play is Steam Frame only: it works because the Frame runs Steam, Proton and SteamVR itself. Quest and Pico headsets don't, so on those the game has to be streamed from a PC.
 
 ## Install on the Steam Frame (standalone)
 
@@ -120,7 +122,7 @@ The mod also reads these, so frameeyeosc isn't the only option:
 |---|---|---|
 | **SteamVR (Steam Link)** | `/avatar/parameters/LeftEyeLid`, `RightEyeLid`, `LeftEyeX/Y`, `RightEyeX/Y` to port 9000 | Built into Steam Link when streaming from a Steam Frame (SteamVR 2.18.2+, SteamOS 0.4.3+). Turn on its OSC output and eye-tracking sharing in Steam Link's VR settings. Streaming only. |
 | **Babble** (Baballonia, Babble Frame Runtime) | `/LeftEyeLid`, `/RightEyeLid`, `/LeftEyeX/Y`, `/RightEyeX/Y` to port 8888 | Enable Babble's OSC output. The mod also listens on 8888 (`Extra Ports`). |
-| **VRCFaceTracking** | `/avatar/parameters/v2/EyeOpenLeft/Right`, `EyeLeftX`, `EyeRightX`, `EyeY` to port 9000 | VRCFT only sends parameters an avatar asks for; the mod doesn't set that up for you, so it works only if VRCFT is already sending these. |
+| **VRCFaceTracking** | `/avatar/parameters/v2/EyeOpenLeft/Right`, `EyeLeftX`, `EyeRightX`, `EyeY` to port 9000 | VRCFT only sends parameters an avatar asks for; the mod doesn't set that up for you, so it works only if VRCFT is already sending these. Likely route for a **Quest Pro** (or Pico 4 Pro) streamed with Virtual Desktop; untested. |
 
 Only one source drives the game at a time. By default it's the first of **frameeyeosc → SteamVR → Babble → VRCFT** that is sending eyelid data. If that one goes quiet for a second, the next one takes over. When a higher one starts sending again, it takes back over after half a second. Change the order, or leave a source out, with `Source Priority` in the `[OSC]` config section. The *eye tracking* row in the mod's VR settings shows which source is in use.
 
@@ -158,7 +160,9 @@ These are read through SteamVR's "legacy" controller buttons, the compatibility 
 
 ### Playing without eye tracking
 
-Headsets without eye tracking work too: with no eye data the aim follows your head (the dot sits at the center of your view and is always shown), and the lower face button acts as your eyes, held down for as long as the game wants them closed. To force this even when eye data arrives, set `Eye Tracking = Off` (or choose it in vr settings).
+Headsets without eye tracking work too: with no eye data the aim follows your head (the dot sits at the center of your view and is always shown), and the lower face button acts as your eyes, held down for as long as the game wants them closed. To force this even when eye data arrives, set `Eye Tracking = Off` (or choose it in vr settings). The main menu then shows `eyes: no data` (or `eyes: off`) after the version.
+
+That's how a **Quest 3, Pico** or any other PC VR headset plays. Install the mod on the PC as in [Install on a PC](#install-on-a-pc-streamed), then stream SteamVR to the headset with Quest Link / Air Link, Virtual Desktop, ALVR or Steam Link. Not tested on these headsets yet. They can't run the game standalone: that needs Steam, Proton and SteamVR on the headset itself, which only the Steam Frame has.
 
 ## Settings
 
