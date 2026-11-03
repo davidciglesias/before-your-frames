@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
@@ -38,6 +38,7 @@ namespace BYEFrameBlink
         private const int SourceCount = 5;
         /// <summary>A higher-priority source must send for this long before it takes over from a working one.</summary>
         private const double TakeOverSeconds = 0.5;
+        internal const int SimSourcePort = 39000; // tools\bye_sim.ps1 sends from here
         /// <summary>Per-source gaze scale on top of Plugin.GazeDegreesPerUnit (frameeyeosc/VRCFT: 1 = 45 degrees).</summary>
         private static readonly float[] GazeScale = { 1f, 1f, 1f, 1f, 1f };
         /// <summary>Per-source vertical sign: Steam Link's LeftEyeY/RightEyeY are + down (measured 2026-11-02 on a Steam Frame).</summary>
@@ -254,8 +255,10 @@ namespace BYEFrameBlink
                 try
                 {
                     byte[] data = client.Receive(ref remote);
-                    // Regression tests drive the plugin from localhost; ignore the real headset (LAN) meanwhile.
-                    if (Plugin.TestMode.Value && !IPAddress.IsLoopback(remote.Address)) continue;
+                    // Regression tests drive the plugin with tools\bye_sim.ps1, which sends from a fixed local port;
+                    // ignore everything else meanwhile: the headset over the LAN, and SteamVR's own eye OSC (Steam
+                    // Link), which comes from this PC too.
+                    if (Plugin.TestMode.Value && !(IPAddress.IsLoopback(remote.Address) && remote.Port == SimSourcePort)) continue;
                     _fromLoopback = IPAddress.IsLoopback(remote.Address);
                     Interlocked.Increment(ref _packetCount);
                     HandlePacket(data, 0, data.Length);

@@ -45,8 +45,11 @@ namespace BYEFrameBlink
             if (_copy == null) _copy = UiOverlay.CreateSprite("BYE Reticle", 30001);
 
             Canvas canvas = _source.canvas != null ? _source.canvas.rootCanvas : null;
-            // Aiming with the head (no eye data), the dot is the only way to see what you aim at: always show it.
-            bool visible = (Plugin.ShowReticle.Value || !Gaze.Active) && _source.isActiveAndEnabled && _source.sprite != null && canvas != null;
+            // Eye aiming fell back to the head because no eye data arrives: the dot (perhaps hidden for eye aiming) is now the
+            // only way to see what you aim at, so show it. A head-aim mode the player picked ("blinks only", eye tracking
+            // off) keeps their own aiming dot choice.
+            bool headAimChosen = !Plugin.GazeAiming.Value || Plugin.EyeTracking.Value == EyeTrackingMode.Off;
+            bool visible = (Plugin.ShowReticle.Value || (!Gaze.Active && !headAimChosen)) && _source.isActiveAndEnabled && _source.sprite != null && canvas != null;
             _copy.enabled = visible;
             Drawing = visible;
             if (visible)

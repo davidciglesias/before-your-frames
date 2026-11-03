@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace BYEFrameBlink
 {
@@ -113,7 +113,9 @@ namespace BYEFrameBlink
 
             Quaternion gaze = LocalRotation;
             Transform head = UnityEngine.XR.XRSettings.enabled ? FindHead(cam) : null;
-            if (head != null && RenderedView.TryGet(cam, out Quaternion rendered) && head.parent != null &&
+            // A simulated head (tests, autoplay) is not what the headset renders: the rendered view follows the real
+            // headset, wherever it lies, so aim from the simulated pose instead.
+            if (head != null && !SimHead.Active && RenderedView.TryGet(cam, out Quaternion rendered) && head.parent != null &&
                 Quaternion.Angle(rendered, head.parent.rotation * HeadTracking.ReadHeadRotation()) < 20f) // else not the view you see (paused, other pass)
             {
                 // The orientation the frame was actually drawn with. On a Steam Frame running the game itself it sits

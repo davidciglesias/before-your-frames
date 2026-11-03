@@ -106,7 +106,9 @@ Launch the game with frameeyeosc running (see the README) and press **F8** for t
   - `buttons`, `click "new game"`, `invoke Type.Method`, `scenes`
   - `gaze x y`, `status [tag]`, `addrs` (every OSC address received), `inspect <Type>`
   - `cfg "guid|Section|Key|value"` (change any plugin's setting live, including UUVR's)
-- Set `Simulate Head = true` to drive the head from OSC or the keyboard (IJKL/UO move, arrow keys rotate).
+- The simulator sends from local UDP port 39000. With `Test Mode = true` (the regression tests set it) the plugin takes OSC only from there, so a real headset, or SteamVR's own eye output (Steam Link, which also comes from this PC), can't mix into a test.
+- Set `Simulate Head = true` to drive the head from OSC or the keyboard (IJKL/UO move, arrow keys rotate). Aim then follows the simulated head, not the view SteamVR renders: that follows the real headset, wherever it's lying.
+- Each scene's game-camera pitch and roll range is logged when the scene ends (`Camera tilt, scene #n`).
 - Set `Trace Csv = true` to log every frame to `BepInEx\BYEFrameBlink_trace.csv`. It includes the render-time camera pose and the left-eye view matrix.
 - `tools\sendkey.ps1 -Key F9 -HoldMs 500` sends real keys to the game window.
 

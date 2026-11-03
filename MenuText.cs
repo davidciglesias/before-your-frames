@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace BYEFrameBlink
 {
@@ -62,6 +62,7 @@ namespace BYEFrameBlink
             { "on",                       new[] { "an", "activé", "sí", "켬", "开", "開", "オン" } },
             { "off",                      new[] { "aus", "désactivé", "no", "끔", "关", "關", "オフ" } },
             { "auto",                     new[] { "auto", "auto", "auto", "자동", "自动", "自動", "自動" } },
+            { "blinks only",              new[] { "nur blinzeln", "clignements seuls", "solo parpadeos", "깜빡임만", "仅眨眼", "僅眨眼", "まばたきのみ" } },
             { "head aim",                 new[] { "kopfzielen", "visée tête", "apuntar con la cabeza", "머리 조준", "头部瞄准", "頭部瞄準", "頭で照準" } },
             { "real",                     new[] { "echt", "réelle", "real", "실제", "真实", "真實", "実寸" } },
             { "a bit bigger",             new[] { "etwas größer", "un peu plus grande", "algo más grande", "조금 크게", "稍大", "稍大", "少し大きく" } },

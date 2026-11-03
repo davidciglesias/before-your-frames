@@ -1,4 +1,4 @@
-<#
+﻿<#
 Build a Release and zip it for a GitHub release: dist\BYEFrameBlink.zip
   package.ps1
 The zip holds BYEFrameBlink.dll, README.md, LICENSE and THIRD_PARTY_NOTICES.md; users extract it into <BepInEx>\plugins\BYEFrameBlink\.
@@ -19,6 +19,8 @@ try {
     $zip = Join-Path $dist 'BYEFrameBlink.zip'
     Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
     Remove-Item $stage -Recurse -Force
+    # The install scripts are separate release assets (their download URLs are .../releases/latest/download/<name>).
+    foreach ($f in 'frame_install.sh', 'pc_install.ps1') { Copy-Item (Join-Path $PSScriptRoot $f) $dist }
     $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
     "zip:    $zip"
     "sha256: $hash"

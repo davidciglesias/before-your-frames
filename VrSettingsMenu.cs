@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -348,7 +348,7 @@ namespace BYEFrameBlink
 
         private static void BuildVrRows(Context c)
         {
-            AddRow(c, "VR Eye Tracking Button", () => MenuText.Row("eye tracking", Plugin.EyeTracking.Value == EyeTrackingMode.Off ? "off (head aim)" : OscReceiver.ActiveSourceLabel ?? "auto (no data)"), Plugin.ToggleEyeTracking);
+            AddRow(c, "VR Eye Tracking Button", () => MenuText.Row("eye tracking", Plugin.EyeTracking.Value == EyeTrackingMode.Off ? "off (head aim)" : !Plugin.GazeAiming.Value ? "blinks only (head aim)" : OscReceiver.ActiveSourceLabel ?? "auto (no data)"), Plugin.ToggleEyeTracking);
             AddRow(c, "VR World Size Button", () => MenuText.Row("world size", StereoComfort.EyeSeparationLabel), StereoComfort.CycleEyeSeparation);
             AddRow(c, "VR Aiming Dot Button", () => MenuText.Row("aiming dot", OnOff(Plugin.ShowReticle.Value)), Plugin.ToggleReticle);
             AddRow(c, "VR Recenter Start Button", () => MenuText.Row("recenter each scene", OnOff(Plugin.RecenterOnSceneStart.Value)), Plugin.ToggleRecenterOnSceneStart);

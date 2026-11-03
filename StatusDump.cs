@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -139,9 +139,15 @@ namespace BYEFrameBlink
             Camera cam = Camera.main;
             if (cam != null)
             {
-                Ray center = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
                 Ray aimed = Gaze.ViewportPointToRay(cam, new Vector3(0.5f, 0.5f, 0f));
-                Vector3 local = Quaternion.Inverse(Quaternion.LookRotation(center.direction, cam.cameraToWorldMatrix.MultiplyVector(Vector3.up))) * aimed.direction;
+                // "Center" = straight ahead of the game camera's VR base (VrCameraOffset), the frame head and gaze turn
+                // from. Unity's own center ray is built from the real headset's pose under UUVR, so with a simulated
+                // head it moved with wherever the headset happened to lie.
+                Transform baseT = cam.transform.Find("VrCameraOffset");
+                Vector3 centerDir = baseT != null ? baseT.forward : cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f)).direction;
+                Vector3 centerUp = baseT != null ? baseT.up : cam.cameraToWorldMatrix.MultiplyVector(Vector3.up);
+                var center = new Ray(aimed.origin, centerDir);
+                Vector3 local = Quaternion.Inverse(Quaternion.LookRotation(center.direction, centerUp)) * aimed.direction;
                 Add("aimAngleFromCenter", Vector3.Angle(center.direction, aimed.direction));
                 Add("aimLocalX", local.x);
                 Add("aimLocalY", local.y);

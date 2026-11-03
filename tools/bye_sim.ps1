@@ -1,4 +1,4 @@
-<#
+﻿<#
 Test driver for BYEFrameBlink: sends fake eyelid / head-pose OSC to the plugin (UDP 127.0.0.1:9000).
 
   bye_sim.ps1 lid 0.1            both eyes 0.1 open (0 = shut, 1 = open)
@@ -38,7 +38,16 @@ param([Parameter(Position = 0)][string]$Cmd, [Parameter(Position = 1, ValueFromR
 $Values = [double[]]@($Rest | Where-Object { $null -ne ($_ -as [double]) } | ForEach-Object { [double]$_ })
 
 $Port = 9000
-$udp = New-Object System.Net.Sockets.UdpClient
+# Send from a fixed port: in Test Mode the plugin takes eye data only from here, so SteamVR's own eye OSC (Steam Link,
+# also from this PC) can't mix in. ReuseAddress: an earlier run's socket may not be released yet.
+$SimSourcePort = 39000
+function New-SimClient {
+    $c = New-Object System.Net.Sockets.UdpClient
+    $c.Client.SetSocketOption([Net.Sockets.SocketOptionLevel]::Socket, [Net.Sockets.SocketOptionName]::ReuseAddress, $true)
+    $c.Client.Bind((New-Object Net.IPEndPoint ([Net.IPAddress]::Loopback), $SimSourcePort))
+    return $c
+}
+$udp = New-SimClient
 $udp.Connect('127.0.0.1', $Port)
 
 function Pad([byte[]]$b) {
@@ -56,7 +65,7 @@ function Send([string]$address, [double[]]$floats = @(), $client = $udp) {
 
 # Babble (Baballonia) sends to its own port.
 function SendBabble([string]$address, [double]$v) {
-    $b = New-Object System.Net.Sockets.UdpClient; $b.Connect('127.0.0.1', 8888)
+    $b = New-SimClient; $b.Connect('127.0.0.1', 8888)
     Send $address @($v) $b; $b.Close()
 }
 

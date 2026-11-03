@@ -11,7 +11,7 @@ namespace BYEFrameBlink
     public class Plugin : BaseUnityPlugin
     {
         public const string Guid = "byeframeblink";
-        public const string Version = "0.7.0";
+        public const string Version = "0.8.0";
 
         internal static ManualLogSource Log;
         internal static Plugin Instance;
@@ -148,7 +148,7 @@ namespace BYEFrameBlink
             SimulateHead = Config.Bind("Head Tracking", "Simulate Head", false,
                 "Debug: replace the real HMD pose with a simulated one (keyboard IJKL/UO move, arrows rotate, or OSC /bye/head).");
 
-            GazeAiming = Config.Bind("Gaze", "Gaze Aiming", true, "Aim at interactables with your eyes instead of the center of your view.");
+            GazeAiming = Config.Bind("Gaze", "Gaze Aiming", true, "Aim at interactables with your eyes instead of the center of your view. false = blinks only: your eyes still blink, but you aim (and pick menu options) with your head, using the dot at the center of your view; a comfort option if gaze aiming feels twitchy.");
             EyeTracking = Config.Bind("Gaze", "Eye Tracking", EyeTrackingMode.Auto,
                 "Auto = use the headset's eye data (gaze + eyelids) when it arrives, otherwise aim with your head. Off = always aim with your head (dot at the center of your view) and blink with the controller's Blink Button, e.g. for headsets without eye tracking.");
             ControllerMenuButton = Config.Bind("Controller", "Menu Button", ControllerButton.Menu,
@@ -208,7 +208,7 @@ namespace BYEFrameBlink
             VeilHalfFovDegrees = Config.Bind("VR", "Veil Half FOV Degrees", 50f,
                 "Half the vertical field of view the eyelids are stretched to (at least the headset's own, read from SteamVR). Lower = lids reach the center sooner.");
             ShowReticle = Config.Bind("VR", "Show Reticle", true,
-                "Show the aiming dot during gameplay. Toggle in game with 'Reticle Toggle Key'. The menu cursor is always shown.");
+                "Show the aiming dot during gameplay. Toggle in game with 'Reticle Toggle Key'. The menu cursor is always shown. If eye data stops arriving while you aim with your eyes, the dot is shown anyway (aim falls back to your head); in a head-aim mode you chose (Gaze Aiming = false, Eye Tracking = Off) this setting is followed.");
             ReticleToggleKey = Config.Bind("VR", "Reticle Toggle Key", KeyCode.F10, "Show/hide the gameplay aiming dot.");
             ViewSyncEnabled = Config.Bind("VR", "Render From Head Pose", true, "While drawing, turn the game camera to your head pose so particles (e.g. fog) and view-dependent shading sit right in the world instead of following your head.");
             ParticleMaxSize = Config.Bind("VR", "Particle Max Screen Size", 0f, "Unity shrinks particles bigger than this many screen-widths to fit; sized for a flat screen, it made big fog patches resize with your view so they followed your head. 0 = leave the game's value.");
@@ -286,6 +286,7 @@ namespace BYEFrameBlink
             Freeze.Update();
             ParticleFacing.Update();
             MenuRecenter.Update();
+            CameraTilt.Update();
 
             DebugCommands.Update();
             SimHead.Update();
@@ -328,8 +329,24 @@ namespace BYEFrameBlink
 
         internal static void ToggleEyeTracking()
         {
-            EyeTracking.Value = EyeTracking.Value == EyeTrackingMode.Off ? EyeTrackingMode.Auto : EyeTrackingMode.Off;
-            Toast.Show(EyeTracking.Value == EyeTrackingMode.Off ? "Eye tracking off: aim with your head" : "Eye tracking: on when available");
+            // Three steps: eyes aim + blink -> eyes only blink, head aims (comfort) -> off (head aims, controller blinks).
+            if (EyeTracking.Value == EyeTrackingMode.Off)
+            {
+                EyeTracking.Value = EyeTrackingMode.Auto;
+                GazeAiming.Value = true;
+                Toast.Show("Eye tracking: on when available");
+            }
+            else if (GazeAiming.Value)
+            {
+                GazeAiming.Value = false;
+                Toast.Show("Blinks only: aim with your head");
+            }
+            else
+            {
+                EyeTracking.Value = EyeTrackingMode.Off;
+                GazeAiming.Value = true;
+                Toast.Show("Eye tracking off: aim with your head");
+            }
         }
 
         internal static string VignetteLabel =>

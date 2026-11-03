@@ -23,7 +23,7 @@ Your normal mouse still works as a fallback.
 
 ## Status
 
-Works on the author's Steam Frame. The whole game has also been played from start to the credits with an automated bot that drives the same input paths a player uses (simulated eyes and head), and 115 regression tests pass. Please open an issue if something misbehaves on your setup.
+Works on the author's Steam Frame. The whole game has also been played from start to the credits with an automated bot that drives the same input paths a player uses (simulated eyes and head), and 120 regression tests pass. Please open an issue if something misbehaves on your setup.
 
 On the Frame, the eye data comes from frameeyeosc, an experimental tool that reads a private interface of the headset software, so a headset update can break it. When streaming to a PC, SteamVR's own eye output (Steam Link) works too, without frameeyeosc.
 
@@ -67,7 +67,21 @@ To go back to streaming from a PC, restore frameeyeosc's target (`~/.config/fram
 
 ## Install on a PC (streamed)
 
-You also need [**Rai Pal**](https://github.com/Raicuparta/rai-pal), with **UUVR** (the Unity *Mono, legacy* variant) installed for the game. Rai Pal also installs BepInEx 5 for you.
+1. Install *Before Your Eyes* in Steam and start it once (flat), then quit.
+2. Open PowerShell (Start menu > "PowerShell") and run:
+
+   ```
+   powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((irm https://github.com/davidciglesias/before-your-frames/releases/latest/download/pc_install.ps1))) -Firewall"
+   ```
+
+   The script ([`tools/pc_install.ps1`](tools/pc_install.ps1), read it first if you like) is the PC twin of the standalone one: it finds the game in your Steam libraries, downloads [BepInEx 5](https://github.com/BepInEx/BepInEx), [UUVR](https://github.com/Raicuparta/uuvr) 0.3.1 and this mod from their GitHub releases, checks them against known checksums and puts them in the game folder, with UUVR's `UI Patch Mode = CanvasRedirect` set. `-Firewall` lets the game receive the eye data from the headset (UDP 9000 and 8888, private networks only; Windows asks for admin rights once). Leave it out if you don't stream eye data over the network. Pass `-GameFolder "D:\...\Before Your Eyes"` if the game isn't found. Run it again to update the mod; your settings are kept.
+3. Start frameeyeosc on the headset (next section), start SteamVR, then launch the game from Steam as usual. No launch options are needed on Windows.
+
+To remove the mod, run the same command with `-Uninstall` instead of `-Firewall`, then *Verify integrity of game files* in Steam (that undoes UUVR's change to the game's settings file).
+
+### Alternative: with Rai Pal
+
+If you already use [**Rai Pal**](https://github.com/Raicuparta/rai-pal), install **UUVR** (the Unity *Mono, legacy* variant) for the game there; Rai Pal also installs BepInEx 5. The install script above notices Rai Pal and only adds this mod to Rai Pal's BepInEx folder. Or by hand:
 
 1. In Rai Pal, add *Before Your Eyes* and install **UUVR** for it. Start the game once with UUVR to check the VR view works, then quit.
 2. Download `BYEFrameBlink.zip` from the [Releases](https://github.com/davidciglesias/before-your-frames/releases) page.
@@ -158,9 +172,13 @@ These are read through SteamVR's "legacy" controller buttons, the compatibility 
 - **vr settings**: eye tracking, world size, aiming dot, recentering, render quality, performance mode and auto resolution, all changeable with gaze + blink (or the controller). Changes are saved to the config file right away.
 - **Opening the menu without a controller:** during play, turn your head down to the left. A "menu" label appears there, fixed in the world. Point your head at it (it lights up) and close your eyes for half a second to open the pause menu. Blinks don't reach the game while it's lit, so the story can't move on by accident. `Gaze Menu Opener = false` turns this off.
 
+### Blinks only (head aiming)
+
+If following your eyes feels twitchy or tiring, you can keep your real blinks but aim with your head: the dot sits at the center of your view and you point it at things with your head, in menus too. In **vr settings**, the *eye tracking* row cycles through `eyes` (the source in use) → `blinks only (head aim)` → `off (head aim)`. In the config file it's `Gaze Aiming = false`. The aiming dot is a separate choice: hide it (F10, the trigger or the *aiming dot* row) if you'd rather aim without it.
+
 ### Playing without eye tracking
 
-Headsets without eye tracking work too: with no eye data the aim follows your head (the dot sits at the center of your view and is always shown), and the lower face button acts as your eyes, held down for as long as the game wants them closed. To force this even when eye data arrives, set `Eye Tracking = Off` (or choose it in vr settings). The main menu then shows `eyes: no data` (or `eyes: off`) after the version.
+Headsets without eye tracking work too: with no eye data the aim follows your head (the dot sits at the center of your view, and is shown even if you hid it, until you pick a head-aim mode yourself), and the lower face button acts as your eyes, held down for as long as the game wants them closed. To force this even when eye data arrives, set `Eye Tracking = Off` (or choose it in vr settings). The main menu then shows `eyes: no data` (or `eyes: off`) after the version.
 
 That's how a **Quest 3, Pico** or any other PC VR headset plays. Install the mod on the PC as in [Install on a PC](#install-on-a-pc-streamed), then stream SteamVR to the headset with Quest Link / Air Link, Virtual Desktop, ALVR or Steam Link. Not tested on these headsets yet. They can't run the game standalone: that needs Steam, Proton and SteamVR on the headset itself, which only the Steam Frame has.
 

@@ -1,4 +1,4 @@
-<#
+﻿<#
 Regression tests for BYEFrameBlink. Builds the plugin, (re)starts the game, drives it over OSC (tools/bye_sim.ps1)
 and asserts on /bye/status snapshots. No headset interaction needed (head pose and eyes are simulated), but SteamVR
 must be running because UUVR needs it.
@@ -292,6 +292,10 @@ try {
     Check 'UUVR UI overlay camera found' ([bool]$h.uiOverlayCamera)
     $reticle = [bool]$h.reticleDrawing
     if ($reticle) { Check 'reticle at view center with no gaze' ((Near $h.reticleYaw 0 0.2) -and (Near $h.reticlePitch 0 0.2)) "yaw=$($h.reticleYaw) pitch=$($h.reticlePitch)" }
+    Cfg 'VR' 'Show Reticle' 'false'; [Threading.Thread]::Sleep(300)
+    $hh = Status 'no-gaze-hidden'
+    Check 'no eye data: hidden aiming dot shown anyway' ([bool]$hh.reticleDrawing) "drawing=$($hh.reticleDrawing)"
+    Cfg 'VR' 'Show Reticle' 'true'
 
     Repeat-Send { & $Sim gaze 0.4 0 } 0.8
     $i = Status 'gaze-right'
@@ -391,7 +395,7 @@ try {
     Repeat-Send { & $Sim gaze 0.4 0; & $Sim lid 0.8 } 0.8
     $hg = Status 'head-aim'
     Check 'eye tracking off: aim follows the head, not the eyes' (-not $hg.gazeActive -and (Near $hg.aimAngleFromCenter 0 0.5)) "gazeActive=$($hg.gazeActive) angle=$($hg.aimAngleFromCenter)"
-    Check 'eye tracking off: aiming dot shown even when hidden' ([bool]$hg.reticleDrawing) "drawing=$($hg.reticleDrawing)"
+    Check 'eye tracking off: hidden aiming dot stays hidden' (-not $hg.reticleDrawing) "drawing=$($hg.reticleDrawing)"
     Repeat-Send { & $Sim lid 0.05 } 0.5; Repeat-Send { & $Sim lid 0.8 } 0.4
     $hl = Status 'head-lids'
     Check 'eye tracking off: eyelid data ignored' ($hl.pluginBlinks -eq $hg.pluginBlinks) "plugin $($hg.pluginBlinks)->$($hl.pluginBlinks)"
@@ -399,6 +403,17 @@ try {
     $hp = Status 'head-pad'
     Check 'controller blink button closes the eyes' ($hp.pluginBlinks -eq $hl.pluginBlinks + 1) "plugin $($hl.pluginBlinks)->$($hp.pluginBlinks)"
     Cfg 'Gaze' 'Eye Tracking' 'Auto'
+
+    # ---------------------------------------------------------------- blinks only: eyes blink, head aims (comfort)
+    Cfg 'Gaze' 'Gaze Aiming' 'false'
+    Repeat-Send { & $Sim gaze 0.4 0; & $Sim lid 0.8 } 0.8
+    $bg = Status 'blinks-only-aim'
+    Check 'blinks only: aim follows the head, not the eyes' (-not $bg.gazeActive -and (Near $bg.aimAngleFromCenter 0 0.5)) "gazeActive=$($bg.gazeActive) angle=$($bg.aimAngleFromCenter)"
+    Check 'blinks only: hidden aiming dot stays hidden' (-not $bg.reticleDrawing) "drawing=$($bg.reticleDrawing)"
+    Repeat-Send { & $Sim gaze 0.4 0; & $Sim lid 0.05 } 0.5; Repeat-Send { & $Sim gaze 0.4 0; & $Sim lid 0.8 } 0.4
+    $bl = Status 'blinks-only-lids'
+    Check 'blinks only: eyelids still blink' ($bl.pluginBlinks -eq $bg.pluginBlinks + 1) "plugin $($bg.pluginBlinks)->$($bl.pluginBlinks)"
+    Cfg 'Gaze' 'Gaze Aiming' 'true'
     Cfg 'VR' 'Show Reticle' 'true'
 
     # ---------------------------------------------------------------- VR settings from the pause menu
@@ -445,7 +460,7 @@ finally {
         if (Get-Process 'Before Your Eyes' -ErrorAction SilentlyContinue) {
             $orig = Get-Content $CfgBackup
             foreach ($pair in @(@('Head Tracking', 'Simulate Head'), @('Head Tracking', 'Positional Tracking'), @('Debug', 'Test Mode'), @('VR', 'Show Reticle'), @('VR', 'Squint When Blink Ready'),
-                               @('VR', 'Eye Separation Scale'), @('VR', 'Vignette'), @('Gaze', 'Eye Tracking'),
+                               @('VR', 'Eye Separation Scale'), @('VR', 'Vignette'), @('Gaze', 'Eye Tracking'), @('Gaze', 'Gaze Aiming'),
                                @('VR', 'Render Scale'), @('VR', 'Menu Render Scale'), @('VR', 'Performance Mode'))) {
                 $line = $orig | Where-Object { $_ -match "^$([regex]::Escape($pair[1])) = " } | Select-Object -First 1
                 if ($line) { Cfg $pair[0] $pair[1] ($line -split ' = ', 2)[1] }
