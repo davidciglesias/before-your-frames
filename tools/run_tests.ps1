@@ -162,7 +162,7 @@ try {
         $v0 = Status 'vr-entry'
         Check 'vr settings entry in the main menu' ($v0.vrMenuEntries -ge 1) "entries=$($v0.vrMenuEntries)"
         $r = MenuPress 'VR Settings Button' 'vr-open'
-        Check 'gaze+blink opens VR settings' ([bool]$r[1].vrMenuOpen -and ($r[1].vrMenuRows -eq 8)) "open=$($r[1].vrMenuOpen) rows=$($r[1].vrMenuRows)"
+        Check 'gaze+blink opens VR settings' ([bool]$r[1].vrMenuOpen -and ($r[1].vrMenuRows -eq 9)) "open=$($r[1].vrMenuOpen) rows=$($r[1].vrMenuRows)"
         $sep0 = $r[1].eyeSeparation
         $r = MenuPress 'VR World Size Button' 'vr-size'
         Check 'VR settings: world size row cycles it' (-not (Near $r[1].eyeSeparation $sep0 0.01)) "$sep0 -> $($r[1].eyeSeparation)"
@@ -420,7 +420,7 @@ try {
     & $Sim invoke PauseMenuController.Pause; [Threading.Thread]::Sleep(1500)
     & $Sim click 'vr settings'; [Threading.Thread]::Sleep(1000)
     $pv = Status 'pause-vr'
-    Check 'VR settings open from the pause menu' ([bool]$pv.vrMenuOpen -and ($pv.vrMenuRows -eq 8)) "open=$($pv.vrMenuOpen) rows=$($pv.vrMenuRows)"
+    Check 'VR settings open from the pause menu' ([bool]$pv.vrMenuOpen -and ($pv.vrMenuRows -eq 9)) "open=$($pv.vrMenuOpen) rows=$($pv.vrMenuRows)"
     & $Sim invoke PauseMenuController.Resume; [Threading.Thread]::Sleep(1000)
     $pr = Status 'pause-resume'
     Check 'resuming closes VR settings' (-not $pr.vrMenuOpen) "open=$($pr.vrMenuOpen)"

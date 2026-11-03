@@ -11,7 +11,7 @@ namespace BYEFrameBlink
     public class Plugin : BaseUnityPlugin
     {
         public const string Guid = "byeframeblink";
-        public const string Version = "0.8.0";
+        public const string Version = "0.9.0";
 
         internal static ManualLogSource Log;
         internal static Plugin Instance;
@@ -36,6 +36,8 @@ namespace BYEFrameBlink
 
         // Head tracking
         internal static ConfigEntry<bool> PositionalTracking;
+        internal static ConfigEntry<LevelHorizonMode> LevelHorizon;
+        internal static ConfigEntry<float> LevelPitchDegrees;
         internal static ConfigEntry<float> PositionScale;
         internal static ConfigEntry<bool> SimulateHead;
         internal static ConfigEntry<bool> RecenterOnSceneStart;
@@ -89,6 +91,7 @@ namespace BYEFrameBlink
         internal static ConfigEntry<bool> CameraDeviceSharpFrame;
         internal static ConfigEntry<float> EyeSeparationScale;
         internal static ConfigEntry<KeyCode> EyeSeparationKey;
+        internal static ConfigEntry<KeyCode> LevelHorizonKey;
         internal static ConfigEntry<bool> DisableDepthOfField;
         internal static ConfigEntry<bool> DisableVolumetricLights;
         internal static ConfigEntry<bool> DisableScreenSpaceReflections;
@@ -145,6 +148,11 @@ namespace BYEFrameBlink
             PositionScale = Config.Bind("Head Tracking", "Position Scale", 1f, "Multiplier for head movement (use if the game world isn't 1 unit = 1 meter).");
             RecenterOnSceneStart = Config.Bind("Head Tracking", "Recenter On Scene Start", true,
                 "Make the direction you're facing 'straight ahead' at the start of every scene (each scene is framed for that view). F6 does it any time; Shift+F6 toggles this in game.");
+            LevelHorizon = Config.Bind("Head Tracking", "Level Horizon", LevelHorizonMode.RollAndPitch,
+                "Some scenes are framed with the game camera tilted, which tilts the whole world in VR. Roll = level any sideways tilt; RollAndPitch = also level up/down tilt up to Level Pitch Degrees (scenes aimed farther up or down keep their framing); Off = as the game frames it.");
+            LevelPitchDegrees = Config.Bind("Head Tracking", "Level Pitch Degrees", 20f,
+                "With Level Horizon = RollAndPitch: camera pitch up to this many degrees is leveled; beyond it the leveling fades out, gone at twice this.");
+            LevelHorizonKey = Config.Bind("Head Tracking", "Level Horizon Key", KeyCode.F, "Switch Level Horizon between Off and RollAndPitch in game.");
             SimulateHead = Config.Bind("Head Tracking", "Simulate Head", false,
                 "Debug: replace the real HMD pose with a simulated one (keyboard IJKL/UO move, arrows rotate, or OSC /bye/head).");
 
@@ -266,6 +274,7 @@ namespace BYEFrameBlink
             ViewSync.Install();
             InputRedirect.PatchGameInputCalls(harmony);
             HeadTracking.TryPatchUuvr(harmony);
+            HorizonLevel.TryPatchUuvr(harmony);
             StereoComfort.TryPatchUuvr(harmony);
             SimHead.Patch(harmony);
             HeadTracking.PatchRecenter(harmony);
@@ -282,6 +291,7 @@ namespace BYEFrameBlink
             else if (Input.GetKeyDown(RecenterKey.Value) || OscReceiver.ConsumeRecenterRequest()) HeadTracking.Recenter();
             if (Input.GetKeyDown(ReticleToggleKey.Value)) ToggleReticle();
             if (Input.GetKeyDown(EyeSeparationKey.Value)) StereoComfort.CycleEyeSeparation();
+            if (Input.GetKeyDown(LevelHorizonKey.Value)) ToggleLevelHorizon();
             if (Input.GetKeyDown(FreezeKey.Value)) Freeze.Toggle();
             Freeze.Update();
             ParticleFacing.Update();
@@ -307,6 +317,12 @@ namespace BYEFrameBlink
         {
             ShowReticle.Value = !ShowReticle.Value;
             Toast.Show(ShowReticle.Value ? "Aiming dot on" : "Aiming dot off");
+        }
+
+        internal static void ToggleLevelHorizon()
+        {
+            LevelHorizon.Value = LevelHorizon.Value == LevelHorizonMode.Off ? LevelHorizonMode.RollAndPitch : LevelHorizonMode.Off;
+            Toast.Show(LevelHorizon.Value == LevelHorizonMode.Off ? "Level horizon: off" : "Level horizon: on");
         }
 
         internal static void ToggleRecenterOnSceneStart()

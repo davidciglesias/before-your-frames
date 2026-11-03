@@ -10,7 +10,7 @@ namespace BYEFrameBlink
     internal static class CameraTilt
     {
         private static int _scene = -1;
-        private static float _minPitch, _maxPitch, _maxRoll, _nextSample;
+        private static float _minPitch, _maxPitch, _maxRoll, _nextSample, _loggedPitch, _loggedRoll, _sceneStart;
 
         public static void Update()
         {
@@ -23,6 +23,7 @@ namespace BYEFrameBlink
                 Flush();
                 _scene = scene;
                 _minPitch = float.MaxValue; _maxPitch = float.MinValue; _maxRoll = 0f;
+                _loggedPitch = float.NaN; _loggedRoll = 0f; _sceneStart = Time.unscaledTime;
             }
             if (Time.unscaledTime < _nextSample) return;
             _nextSample = Time.unscaledTime + 0.25f;
@@ -32,6 +33,13 @@ namespace BYEFrameBlink
             _minPitch = Mathf.Min(_minPitch, pitch);
             _maxPitch = Mathf.Max(_maxPitch, pitch);
             if (Mathf.Abs(roll) > Mathf.Abs(_maxRoll)) _maxRoll = roll;
+            // Mid-scene: log whenever the camera moves 4+ degrees of pitch or 2+ of roll from the last logged pose, so a
+            // tilted moment inside a long scene can be found by time.
+            if (float.IsNaN(_loggedPitch) || Mathf.Abs(pitch - _loggedPitch) >= 4f || Mathf.Abs(roll - _loggedRoll) >= 2f)
+            {
+                _loggedPitch = pitch; _loggedRoll = roll;
+                Plugin.Log.LogInfo($"Camera tilt, scene #{scene} +{Time.unscaledTime - _sceneStart:F0}s: pitch {pitch:F1}, roll {roll:F1}");
+            }
         }
 
         private static void Flush()

@@ -284,6 +284,7 @@ namespace BYEFrameBlink
                 case "/bye/eyeshot": EyeShot(arg); break;
                 case "/bye/vfcheck": ViewfinderCheck(); break;
                 case "/bye/viewsync": ViewSync.LogNext = true; break;
+                case "/bye/horizon": Plugin.Log.LogInfo("[cmd] horizon " + HorizonLevel.Describe()); break;
                 case "/bye/lookat": HeadTracking.LookAt(arg); break;
                 case "/bye/yaw": HeadTracking.AddYaw(float.Parse(arg, System.Globalization.CultureInfo.InvariantCulture)); break;
                 case "/bye/pp":

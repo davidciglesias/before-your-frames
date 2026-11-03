@@ -355,6 +355,7 @@ namespace BYEFrameBlink
             AddRow(c, "VR Recenter Button", () => MenuText.Row("recenter view now", null), () => HeadTracking.Recenter());
             AddRow(c, "VR Render Quality Button", () => MenuText.Row("render quality (in game)", RenderScale.Label), RenderScale.Cycle);
             AddRow(c, "VR Performance Button", () => MenuText.Row("performance mode", Performance.Label), Performance.Cycle);
+            AddRow(c, "VR Level Horizon Button", () => MenuText.Row("level horizon", OnOff(Plugin.LevelHorizon.Value != LevelHorizonMode.Off)), Plugin.ToggleLevelHorizon);
             AddRow(c, "VR Back Button", () => MenuText.Back, () => Close(true), true);
         }
 

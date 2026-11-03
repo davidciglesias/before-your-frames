@@ -74,10 +74,10 @@ To go back to streaming from a PC, restore frameeyeosc's target (`~/.config/fram
    powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((irm https://github.com/davidciglesias/before-your-frames/releases/latest/download/pc_install.ps1))) -Firewall"
    ```
 
-   The script ([`tools/pc_install.ps1`](tools/pc_install.ps1), read it first if you like) is the PC twin of the standalone one: it finds the game in your Steam libraries, downloads [BepInEx 5](https://github.com/BepInEx/BepInEx), [UUVR](https://github.com/Raicuparta/uuvr) 0.3.1 and this mod from their GitHub releases, checks them against known checksums and puts them in the game folder, with UUVR's `UI Patch Mode = CanvasRedirect` set. `-Firewall` lets the game receive the eye data from the headset (UDP 9000 and 8888, private networks only; Windows asks for admin rights once). Leave it out if you don't stream eye data over the network. Pass `-GameFolder "D:\...\Before Your Eyes"` if the game isn't found. Run it again to update the mod; your settings are kept.
+   The script ([`tools/pc_install.ps1`](tools/pc_install.ps1), read it first if you like) is the PC twin of the standalone one: it finds the game in your Steam libraries, downloads [BepInEx 5](https://github.com/BepInEx/BepInEx), [UUVR](https://github.com/Raicuparta/uuvr) 0.3.1 and this mod from their GitHub releases, checks them against known checksums and puts them in the game folder, with UUVR's `UI Patch Mode = CanvasRedirect` set. `-Firewall` lets the game receive the eye data from the headset (UDP 9000 and 8888, private networks only; Windows asks for admin rights once). It also clears any rule Windows made blocking the game (from cancelling its "allow this app?" prompt), and warns if your network is set to Public. Leave it out if you don't stream eye data over the network. Pass `-GameFolder "D:\...\Before Your Eyes"` if the game isn't found. Run it again to update the mod; your settings are kept.
 3. Start frameeyeosc on the headset (next section), start SteamVR, then launch the game from Steam as usual. No launch options are needed on Windows.
 
-To remove the mod, run the same command with `-Uninstall` instead of `-Firewall`, then *Verify integrity of game files* in Steam (that undoes UUVR's change to the game's settings file).
+To remove the mod, run the same command with `-Uninstall` instead of `-Firewall` (it also removes the firewall rule), then *Verify integrity of game files* in Steam (that undoes UUVR's change to the game's settings file).
 
 ### Alternative: with Rai Pal
 
@@ -169,7 +169,7 @@ These are read through SteamVR's "legacy" controller buttons, the compatibility 
 
 - The main menu, the pause menu and chapter select are laid out in **two columns** with plenty of room between options, so they're easy to pick by gaze. Options about the webcam (calibration, camera feed, eye detection guide) are hidden, since the headset replaces it.
 - **subtitles** replaces the game's settings page: every subtitle language (and "no subtitles") is a button, and the menus follow the chosen language. Subtitles are drawn bigger and bold, with an outline, so they read well in the headset.
-- **vr settings**: eye tracking, world size, aiming dot, recentering, render quality, performance mode and auto resolution, all changeable with gaze + blink (or the controller). Changes are saved to the config file right away.
+- **vr settings**: eye tracking, world size, aiming dot, recentering, render quality, performance mode and auto resolution, level horizon, all changeable with gaze + blink (or the controller). Changes are saved to the config file right away.
 - **Opening the menu without a controller:** during play, turn your head down to the left. A "menu" label appears there, fixed in the world. Point your head at it (it lights up) and close your eyes for half a second to open the pause menu. Blinks don't reach the game while it's lit, so the story can't move on by accident. `Gaze Menu Opener = false` turns this off.
 
 ### Blinks only (head aiming)
@@ -192,6 +192,7 @@ All settings are in `BepInEx\config\byeframeblink.cfg`; the defaults should work
 - **Aim feels jittery or laggy:** change `Smoothing Seconds`.
 - **Targets are hard to hit:** raise `Aim Assist Degrees` (3 by default, 0 turns it off).
 - **Head position:** set `Positional Tracking = true`. `Position Scale` scales the movement.
+- **Tilted horizon:** some scenes are framed with the game camera pitched down or rolled, which tilts the whole world in VR. `Level Horizon = RollAndPitch` (the default) levels it (pitch up to `Level Pitch Degrees`, default 20; scenes aimed farther up or down keep their framing), `Roll` levels only sideways tilt, `Off` keeps the game's framing. "level horizon" in vr settings and the F key (`Level Horizon Key`) switch it on or off.
 - **Recentering:** `Recenter On Scene Start` (default on) makes the direction you're facing straight ahead at the start of every scene, since each scene is framed for that view. F6 does it any time, and Shift+F6 turns this on or off in game. These keys and F10/F11 show a short message in your view.
 - **Menus:** look roughly at an option and do a deliberate blink. The option nearest to where you look is selected if it is within `Menu Snap Degrees` (8; Back buttons reach further), and while a menu is open its panel is drawn `Menu Panel Scale` (1.5×) bigger and the main and pause menu options are spaced `Menu Spacing` (1.35×) farther apart, so they are easier to pick. `Menu Blink Seconds` (0.3) is how long the press blink must last; natural blinks are ignored.
 - **Intro:** `Skip Intro Logos` skips the splash screens after the first launch.
@@ -217,7 +218,7 @@ The game was framed for a flat screen, and many scenes put objects a few centime
 
 ## Troubleshooting
 
-- **Nothing happens when I blink.** Press F8. If "OSC packets" stays at 0, the headset's data isn't arriving: check the target address and port, the firewall, and that both are on the same network. If packets arrive but "Lid L/R" doesn't move, check the addresses in the `[OSC]` section.
+- **Nothing happens when I blink.** Press F8. If "OSC packets" stays at 0, the headset's data isn't arriving: check the target address and port, the firewall (a Windows network set to Public, or a block rule left by a cancelled "allow this app?" prompt; re-run the install command with `-Firewall` to fix both or warn), and that both are on the same network. If packets arrive but "Lid L/R" doesn't move, check the addresses in the `[OSC]` section.
 - **The screen is black or shows the desktop.** Check `UI Patch Mode = CanvasRedirect` in the UUVR config.
 - **Menu options are hard to select, or the desktop window shows debug panels.** Rai Pal may also have installed *Unity Explorer*, a modding tool whose windows sit on the desktop window. This plugin ignores them, but for normal play you can uninstall Unity Explorer for this game in Rai Pal (or press F7 to hide its windows).
 - **The camera asks for access / calibration appears.** Make sure `Force Click Blink Mode` and `Block Webcam` are `true`.

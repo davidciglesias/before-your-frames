@@ -74,20 +74,70 @@ if (Test-Path $doorstop) {
     }
 }
 
+$RuleName = 'Before Your Frames eye data'
+
+# Runs a script block's text as admin (one UAC prompt). -EncodedCommand, so quotes or spaces in the game path can't
+# break the command line. Returns the exit code, or $null if the user declined the prompt.
+function Invoke-Elevated([string]$script) {
+    $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
+    try {
+        $p = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile', '-EncodedCommand', $enc
+        return $p.ExitCode
+    } catch { return $null }
+}
+
+# Inbound rules Windows itself made for the game: when its "allow this app?" prompt is cancelled it adds Block rules,
+# and a Block rule beats any Allow rule, so eye data would stay blocked whatever we add.
+function Get-GameBlockRules($exePath) {
+    @(Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue |
+        Where-Object { $_.Program -and [Environment]::ExpandEnvironmentVariables($_.Program) -eq $exePath } |
+        Get-NetFirewallRule -ErrorAction SilentlyContinue |
+        Where-Object { $_.Direction -eq 'Inbound' -and $_.Action -eq 'Block' -and $_.Enabled -eq 'True' })
+}
+
 function Add-FirewallRules {
     $exePath = Join-Path $GameFolder $Exe
-    $cmd = "Remove-NetFirewallRule -DisplayName 'Before Your Frames eye data' -ErrorAction SilentlyContinue; " +
-           "New-NetFirewallRule -DisplayName 'Before Your Frames eye data' -Direction Inbound -Action Allow -Protocol UDP " +
-           "-LocalPort 9000,8888 -Program '$exePath' -Profile Private | Out-Null"
+    $blocks = Get-GameBlockRules $exePath
+    $q = $exePath -replace "'", "''"
+    $script = @"
+`$ErrorActionPreference = 'Stop'
+try {
+    `$exe = '$q'
+    Remove-NetFirewallRule -DisplayName '$RuleName' -ErrorAction SilentlyContinue
+    Get-NetFirewallApplicationFilter | Where-Object { `$_.Program -and [Environment]::ExpandEnvironmentVariables(`$_.Program) -eq `$exe } |
+        Get-NetFirewallRule | Where-Object { `$_.Direction -eq 'Inbound' -and `$_.Action -eq 'Block' } | Remove-NetFirewallRule
+    New-NetFirewallRule -DisplayName '$RuleName' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 9000,8888 -Program `$exe -Profile Private | Out-Null
+    exit 0
+} catch { exit 1 }
+"@
     Write-Host 'Adding a firewall rule (Windows will ask for admin rights)...'
-    try {
-        $p = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile', '-Command', $cmd
-        if ($p.ExitCode -eq 0) { Write-Host 'Firewall: the game may now receive eye data on UDP 9000/8888 (private networks).' }
-        else { Write-Host "Firewall rule failed (exit $($p.ExitCode))." -ForegroundColor Yellow }
-    } catch { Write-Host 'Firewall rule skipped (admin rights declined).' -ForegroundColor Yellow }
+    if ($blocks.Count) { Write-Host "  also removing $($blocks.Count) Windows rule(s) blocking the game (from a cancelled 'allow this app?' prompt)" }
+    $code = Invoke-Elevated $script
+    if ($null -eq $code) { Write-Host 'Firewall rule skipped (admin rights declined).' -ForegroundColor Yellow; return }
+    $rule = Get-NetFirewallRule -DisplayName $RuleName -ErrorAction SilentlyContinue
+    if ($code -ne 0 -or -not $rule -or (Get-GameBlockRules $exePath).Count) {
+        Write-Host "Firewall rule failed (exit $code). Allow 'Before Your Eyes' for private networks in Windows Security > Firewall > Allow an app." -ForegroundColor Yellow
+        return
+    }
+    Write-Host 'Firewall: the game may now receive eye data on UDP 9000/8888 (private networks).'
+    # The rule is for private networks only; a network Windows calls Public (its default for new networks) won't get it.
+    $connected = @(Get-NetConnectionProfile -ErrorAction SilentlyContinue)
+    if ($connected.Count -and -not ($connected | Where-Object { $_.NetworkCategory -ne 'Public' })) {
+        $names = ($connected | ForEach-Object { $_.Name }) -join ', '
+        Write-Host "Your network ($names) is set to Public, so the rule doesn't apply yet. If the headset is on it, set it to" -ForegroundColor Yellow
+        Write-Host "Private: Settings > Network & internet > (your connection) > Network profile type > Private." -ForegroundColor Yellow
+    }
+}
+
+function Remove-FirewallRules {
+    if (-not (Get-NetFirewallRule -DisplayName $RuleName -ErrorAction SilentlyContinue)) { return }
+    Write-Host 'Removing the firewall rule (Windows will ask for admin rights)...'
+    $code = Invoke-Elevated "Remove-NetFirewallRule -DisplayName '$RuleName'; exit [int](-not `$?)"
+    if ($code -ne 0) { Write-Host "Firewall rule '$RuleName' left in place; remove it in Windows Defender Firewall if you like." -ForegroundColor Yellow }
 }
 
 if ($Uninstall) {
+    Remove-FirewallRules
     Remove-Item (Join-Path $BepInEx 'plugins\BYEFrameBlink') -Recurse -Force -ErrorAction SilentlyContinue
     if ($RaiPal) {
         Write-Host 'Removed this mod. UUVR and BepInEx belong to Rai Pal: uninstall them there.'

@@ -122,6 +122,7 @@ switch ($Cmd) {
     'freeze'   { SendString '/bye/freeze' ($Rest -join ' ') }
     'vfcheck'  { SendString '/bye/vfcheck' '' }
     'viewsync' { SendString '/bye/viewsync' '' }
+    'horizon'  { SendString '/bye/horizon' '' }
     'lookat'   { SendString '/bye/lookat' ($Rest -join ' ') }
     'yaw'      { SendString '/bye/yaw' ($Rest -join ' ') }
     'scenes'   { SendString '/bye/scenes' '' }
